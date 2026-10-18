@@ -1,0 +1,12 @@
+[
+  {"ruling_id":"N224817","date":"2012-10-10","family":"stainless_drinkware","code":"9617.00.1000","summary":"Laboratory confirmed pressure between stainless-steel walls below atmospheric pressure; treated as a vacuum vessel.","source_url":"https://rulings.cbp.gov/ruling/N224817"},
+  {"ruling_id":"N241154","date":"2013-06-24","family":"stainless_drinkware","code":"7323.93.0080","summary":"Laboratory found a double-wall stainless tumbler was not insulated by vacuum; treated as stainless household ware.","source_url":"https://rulings.cbp.gov/ruling/N241154"},
+  {"ruling_id":"N321134","date":"2021-12-03","family":"stainless_drinkware","code":"7323.93.0080","summary":"Laboratory found no vacuum properties in a double-wall stainless tumbler.","source_url":"https://rulings.cbp.gov/ruling/N321134"},
+  {"ruling_id":"N328023","date":"2022-09-16","family":"plastic_housewares","code":"3926.40.0090;3924.90.5650","summary":"Distinguished an ornamental polyresin acorn from a utilitarian polyresin planter.","source_url":"https://rulings.cbp.gov/ruling/N328023"},
+  {"ruling_id":"N283412","date":"2017-03-08","family":"plastic_housewares","code":"3924.90.5650","summary":"HDPE planters designed as garden equipment were treated as other household articles of plastics.","source_url":"https://rulings.cbp.gov/ruling/N283412"},
+  {"ruling_id":"N321767","date":"2021-10-14","family":"plastic_housewares","code":"3926.40.0090","summary":"Polyresin gnome statuettes were treated as other ornamental articles of plastics.","source_url":"https://rulings.cbp.gov/ruling/N321767"},
+  {"ruling_id":"H296920","date":"2018-09-14","family":"plastic_housewares","code":"3926.90.99","summary":"Explains that heading 3924 household articles must share a household function with the heading's exemplars; residual plastic articles fall in heading 3926 when not covered more specifically.","source_url":"https://rulings.cbp.gov/ruling/H296920"},
+  {"ruling_id":"L85060","date":"2005-06-14","family":"ceramic_mugs","code":"6911.10.4500","summary":"Porcelain mugs were treated as mugs and other steins of porcelain or china.","source_url":"https://rulings.cbp.gov/ruling/L85060"},
+  {"ruling_id":"N295888","date":"2018-04-26","family":"ceramic_mugs","code":"6912.00.4400","summary":"Dolomite earthenware ceramic mugs were treated as mugs other than of porcelain or china.","source_url":"https://rulings.cbp.gov/ruling/N295888"}
+]
+

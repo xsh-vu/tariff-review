@@ -1,0 +1,248 @@
+{
+  "dataset_id": "cbp-cross-heldout-v1",
+  "version": 1,
+  "created_on": "2026-10-18",
+  "task": "Classify each product under the HTSUS schedule in effect on the case date. Return the most specific base Chapter 1-97 code supported by the supplied facts. Exclude Chapter 99 overlays and special-program eligibility. Abstain if a decisive fact is missing.",
+  "cases": [
+    {
+      "case_id": "PR-DW-001",
+      "family": "stainless_drinkware",
+      "as_of_date": "2026-01-28",
+      "product_name": "Double-walled stainless-steel tumbler with novelty lid",
+      "product_facts": [
+        "The article consists of a stainless-steel tumbler, stainless-steel drinking straw, and aluminum lid.",
+        "It holds 28 fluid ounces and is designed to keep beverages cold for an extended period.",
+        "Laboratory analysis found two stainless-steel walls with a vacuum between them.",
+        "The space between the walls contains no insulating fill, and the article has no separate protective outer casing."
+      ]
+    },
+    {
+      "case_id": "PR-DW-002",
+      "family": "stainless_drinkware",
+      "as_of_date": "2025-09-25",
+      "product_name": "Stainless-steel and glass cold-beverage tumbler",
+      "product_facts": [
+        "The 20-ounce portable vessel has a stainless-steel outer sleeve, borosilicate-glass inner, removable plastic lid, and plastic straw.",
+        "It is intended to keep cold beverages cold for an extended period and is not intended for hot liquids.",
+        "Laboratory analysis found the stainless-steel outer vessel to be double-walled and vacuum insulated.",
+        "The borosilicate glass is neither pressed nor specially tempered."
+      ]
+    },
+    {
+      "case_id": "PR-DW-003",
+      "family": "stainless_drinkware",
+      "as_of_date": "1999-11-09",
+      "product_name": "Vacuum-sealed stainless-steel tumbler with sip lid",
+      "product_facts": [
+        "The stainless-steel tumbler is about 6 inches high with a 3-inch top opening and a plastic insert in its base.",
+        "It has a double-walled stainless-steel receptacle with a vacuum between the walls and a patterned plastic outer covering around part of the vessel.",
+        "Its screw-on lid has small drinking holes and does not fully seal the drinking opening.",
+        "Testing showed that liquid introduced at 212 degrees Fahrenheit cooled to 158 degrees after one hour and 135 degrees after two hours."
+      ]
+    },
+    {
+      "case_id": "PR-DW-004",
+      "family": "stainless_drinkware",
+      "as_of_date": "2012-08-31",
+      "product_name": "Double-walled travel mug with plastic interior",
+      "product_facts": [
+        "The 16-ounce travel mug has a stainless-steel body, plastic interior lining, silicone grip sleeve, rubber base, and plastic screw-on sip lid.",
+        "It is approximately 6.5 inches high and tapers to a 2.5-inch base.",
+        "Laboratory analysis found a double wall that provides insulation.",
+        "Laboratory analysis also found that the vessel is not insulated by a vacuum."
+      ]
+    },
+    {
+      "case_id": "PR-DW-005",
+      "family": "stainless_drinkware",
+      "as_of_date": "2015-11-17",
+      "product_name": "Single-wall stainless-steel beverage growler",
+      "product_facts": [
+        "The cylindrical stainless-steel vessel holds 40 ounces, with a 64-ounce version also imported.",
+        "It has a narrow neck and latch-style plastic cap and is used to carry and store draft beer or other beverages for household consumption.",
+        "The interior is electropolished to avoid retaining or imparting flavors.",
+        "The vessel has single-wall construction and provides no vacuum insulation."
+      ]
+    },
+    {
+      "case_id": "PR-DW-006",
+      "family": "stainless_drinkware",
+      "as_of_date": "2018-06-13",
+      "product_name": "Large partially evacuated stainless-steel tumbler",
+      "product_facts": [
+        "The 34-ounce beverage tumbler has a tapered cylindrical body made of double-walled stainless steel.",
+        "A partial vacuum between the walls acts as a barrier to heat transfer.",
+        "The tumbler has a flat bottom, a plastic sealing lid with sip and straw openings, and a reusable plastic straw.",
+        "It has no separate protective outer casing."
+      ]
+    },
+    {
+      "case_id": "PR-DW-007",
+      "family": "stainless_drinkware",
+      "as_of_date": "2026-07-14",
+      "product_name": "Vacuum-insulated stainless-steel water bottle",
+      "product_facts": [
+        "The 600-milliliter bottle is approximately 25 centimeters high and 7.2 centimeters in diameter.",
+        "It has a stainless-steel exterior, flat bottom, bamboo-topped screw cap, and swiveling steel handle.",
+        "Laboratory testing confirmed two stainless-steel walls with a vacuum between the sealed walls and increased heat loss after the outer wall was breached.",
+        "There is no insulating fill and no separate protective outer casing."
+      ]
+    },
+    {
+      "case_id": "PR-PL-001",
+      "family": "plastic_housewares",
+      "as_of_date": "2024-03-29",
+      "product_name": "Electronic robotic plant pot",
+      "product_facts": [
+        "The molded ABS plastic pot is designed to hold live or artificial plants and includes a removable inner plastic container.",
+        "It includes motion and moisture sensors, Bluetooth speakers, audio recording and playback, touch-sensitive movement, and three AA batteries.",
+        "The plastic accounts for the large majority of the item's weight and value.",
+        "With depleted batteries, the plastic pot still supports and holds a plant."
+      ]
+    },
+    {
+      "case_id": "PR-PL-002",
+      "family": "plastic_housewares",
+      "as_of_date": "2019-02-22",
+      "product_name": "Resin and stone-powder planter",
+      "product_facts": [
+        "The circular planter is about 16 inches across the opening, 13 inches deep, and tapers to a 6.5-inch base.",
+        "It has a ribbed exterior and no drainage holes when imported.",
+        "It is made predominantly from resin with a small amount of natural stone powder.",
+        "The resin supplies the bulk of the article; the stone powder supports the resin component."
+      ]
+    },
+    {
+      "case_id": "PR-PL-003",
+      "family": "plastic_housewares",
+      "as_of_date": "2017-09-19",
+      "product_name": "Clear plastic planter saucer",
+      "product_facts": [
+        "The round, open-top saucer is made of clear PVC plastic with sloped sides and a top rim.",
+        "It is sold in sizes designed to fit beneath 6-, 8-, and 10-inch plant pots.",
+        "Its function is to sit underneath a planter and capture excess water overflow.",
+        "Determine only the ordinary base classification; do not evaluate conditional horticultural-use provisions."
+      ]
+    },
+    {
+      "case_id": "PR-PL-004",
+      "family": "plastic_housewares",
+      "as_of_date": "2016-08-03",
+      "product_name": "Polypropylene flower and herb planter",
+      "product_facts": [
+        "The cylindrical white article is made of polypropylene plastic and has horizontal ridges around its exterior.",
+        "It measures about 5.6 inches high, 7.25 inches across its open top, and 3.25 inches across its base.",
+        "It is designed to hold and grow flowers, vegetables, herbs, and similar plants.",
+        "Determine only the ordinary base classification; do not evaluate conditional horticultural-use provisions."
+      ]
+    },
+    {
+      "case_id": "PR-PL-005",
+      "family": "plastic_housewares",
+      "as_of_date": "2011-07-28",
+      "product_name": "Fiberglass-reinforced plastic self-watering planter",
+      "product_facts": [
+        "The planter is formed from a plastic material and resin mixture with fiberglass molded between layers for reinforcement.",
+        "The materials are uniformly incorporated throughout the planter, which is about 10.6 inches high and 14.17 inches in diameter.",
+        "Its bottom has a 2-inch-high water reservoir and a removable rubber plug that lets the user retain or drain water.",
+        "Its intended function is to hold household plants."
+      ]
+    },
+    {
+      "case_id": "PR-PL-006",
+      "family": "plastic_housewares",
+      "as_of_date": "2016-08-23",
+      "product_name": "Illuminated plastic snowman decoration",
+      "product_facts": [
+        "The article is a plastic snowman figure with a textile hat and scarf, molded facial features, buttons, and projecting hands.",
+        "A switch activates internal illumination.",
+        "When the illumination is off, the article continues to perform its primary decorative role.",
+        "The textile pieces are subordinate embellishments to the plastic figure."
+      ]
+    },
+    {
+      "case_id": "PR-PL-007",
+      "family": "plastic_housewares",
+      "as_of_date": "2015-08-25",
+      "product_name": "Silicone wine-glass badge",
+      "product_facts": [
+        "The flower-petal-shaped badge is made of burgundy silicone plastic with less than 0.5 percent alumina powder.",
+        "It has no adhesive and is designed to cling to a wine glass.",
+        "The importer states that the alumina reflects ambient infrared light into the wine to accelerate maturation.",
+        "The article measures approximately 3 inches by 1.75 inches and bears a brand name on its face."
+      ]
+    },
+    {
+      "case_id": "PR-CE-001",
+      "family": "ceramic_drinkware",
+      "as_of_date": "2025-04-22",
+      "product_name": "Porcelain handled drinking cup",
+      "product_facts": [
+        "Evaluate only the handled cup component of a retail package that also contains a pen and miniature plastic ball.",
+        "The white porcelain drinking cup is suitable for drink contact and measures about 4.75 inches long, 3.25 inches wide, and 3.75 inches high.",
+        "It has small arch openings at the lower front and back and a golf-themed handle.",
+        "Its form is not straight-sided or barrel-shaped, so the top and bottom are not approximately the same width."
+      ]
+    },
+    {
+      "case_id": "PR-CE-002",
+      "family": "ceramic_drinkware",
+      "as_of_date": "2016-07-06",
+      "product_name": "Double-walled bone-china travel tumbler",
+      "product_facts": [
+        "The drinking tumbler is made of bone china and has a silicone-plastic lid.",
+        "Its double-wall construction protects the user's hands from hot liquid but is not vacuum insulated.",
+        "It has a flat bottom and is imported in 8-, 12-, and 14-ounce sizes, each about 3.5 inches across the top.",
+        "Each tumbler is valued above $31.50 per dozen."
+      ]
+    },
+    {
+      "case_id": "PR-CE-003",
+      "family": "ceramic_drinkware",
+      "as_of_date": "2015-04-14",
+      "product_name": "Straight-sided stoneware mug",
+      "product_facts": [
+        "The 12-ounce drinking vessel is made of glazed stoneware ceramic and has a C-shaped handle.",
+        "It is cylindrical, approximately 3 inches across both its open mouth and base, and maintains that diameter from top to bottom.",
+        "It is approximately 3.75 inches high and has a flat bottom.",
+        "It will be printed after importation and sold as a promotional article."
+      ]
+    },
+    {
+      "case_id": "PR-CE-004",
+      "family": "ceramic_drinkware",
+      "as_of_date": "2022-06-10",
+      "product_name": "Tapered stoneware handled cup",
+      "product_facts": [
+        "The glazed stoneware drinking cup is approximately 4 inches high with a 3.30-inch open top tapering to a 3.07-inch base.",
+        "It has a handle and will not be imported with or designed for use with a saucer.",
+        "It is available in several decorative designs.",
+        "It is valued above $5.25 per dozen and does not have the straight-sided or barrel-shaped dimensions of a tariff mug."
+      ]
+    },
+    {
+      "case_id": "PR-CE-005",
+      "family": "ceramic_drinkware",
+      "as_of_date": "2022-01-20",
+      "product_name": "Dolomite candy-corn drinking cup with lid and spoon",
+      "product_facts": [
+        "The retail package contains handled drinking cups, lids, and spoons, all made entirely of dolomite ceramic.",
+        "Each 18-ounce cup is about 5.62 inches high, with a 2.63-inch top that widens to a 3.9-inch base, and is not used with a saucer.",
+        "The cups resemble candy corn; their lids have spoon apertures, and each spoon is decorated with a jack-o'-lantern image.",
+        "The tapered cups are not straight-sided or barrel-shaped, and the decoration is not treated as a qualifying festive motif."
+      ]
+    },
+    {
+      "case_id": "PR-CE-006",
+      "family": "ceramic_drinkware",
+      "as_of_date": "2026-05-19",
+      "product_name": "Decorated dolomite handled cup",
+      "product_facts": [
+        "The drinking cup is made of dolomite ceramic and is safe for drink contact.",
+        "It is about 3.94 inches high, with a 4.25-inch open top tapering to a 2.75-inch base, and has a side handle.",
+        "It has a wavy rim, colored glaze, printed wording, and floral decoration.",
+        "It is valued at $10.08 per dozen."
+      ]
+    }
+  ]
+}

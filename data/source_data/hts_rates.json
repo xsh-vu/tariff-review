@@ -1,0 +1,66 @@
+{
+  "revision": "2026 HTS Revision 21",
+  "observed_at": "2026-10-18",
+  "scope": "Column 1 General base duty only",
+  "limitations": [
+    "Synthetic entries are dated 2026-10-18 because earlier revision rows have not yet been cached.",
+    "Chapter 99 duties, trade remedies, special programs, and refund eligibility are excluded."
+  ],
+  "rates": [
+    {
+      "code": "9617.00.1000",
+      "description": "Vacuum flasks and other vacuum vessels, vessels having a capacity not exceeding 1 liter",
+      "rate_type": "ad_valorem",
+      "general_rate": "0.072",
+      "effective_from": "2026-10-18",
+      "effective_to": null,
+      "source_url": "https://hts.usitc.gov/search?query=9617.00.1000"
+    },
+    {
+      "code": "7323.93.0080",
+      "description": "Other table, kitchen or household articles of stainless steel",
+      "rate_type": "ad_valorem",
+      "general_rate": "0.020",
+      "effective_from": "2026-10-18",
+      "effective_to": null,
+      "source_url": "https://hts.usitc.gov/search?query=7323.93.0080"
+    },
+    {
+      "code": "3924.90.5650",
+      "description": "Other household articles of plastics, other",
+      "rate_type": "ad_valorem",
+      "general_rate": "0.034",
+      "effective_from": "2026-10-18",
+      "effective_to": null,
+      "source_url": "https://hts.usitc.gov/search?query=3924.90.5650"
+    },
+    {
+      "code": "3926.40.0090",
+      "description": "Other statuettes and ornamental articles of plastics",
+      "rate_type": "ad_valorem",
+      "general_rate": "0.053",
+      "effective_from": "2026-10-18",
+      "effective_to": null,
+      "source_url": "https://hts.usitc.gov/search?query=3926.40.0090"
+    },
+    {
+      "code": "6911.10.4500",
+      "description": "Mugs and other steins of porcelain or china",
+      "rate_type": "ad_valorem",
+      "general_rate": "0.140",
+      "effective_from": "2026-10-18",
+      "effective_to": null,
+      "source_url": "https://hts.usitc.gov/search?query=6911.10.3710"
+    },
+    {
+      "code": "6912.00.4400",
+      "description": "Mugs and other steins of ceramic other than porcelain or china",
+      "rate_type": "ad_valorem",
+      "general_rate": "0.100",
+      "effective_from": "2026-10-18",
+      "effective_to": null,
+      "source_url": "https://hts.usitc.gov/search?query=6911.10.3710"
+    }
+  ]
+}
+

@@ -1,0 +1,156 @@
+{
+  "evaluation_mode": "live_responses_api_remote_mcp",
+  "openai_api_evaluation": true,
+  "status": "passed",
+  "measured_at": "2026-10-18T20:15:21Z",
+  "elapsed_seconds": 71.525,
+  "summary": {
+    "passed": 6,
+    "total": 6
+  },
+  "cases": [
+    {
+      "name": "live_classification:NF-DW-001",
+      "passed": true,
+      "expected_outcome": "potential_overpayment",
+      "actual_outcome": "potential_overpayment",
+      "expected_code": "7323.93.0080",
+      "actual_code": "7323.93.0080"
+    },
+    {
+      "name": "live_classification:NF-DW-002",
+      "passed": true,
+      "expected_outcome": "potential_underpayment",
+      "actual_outcome": "potential_underpayment",
+      "expected_code": "9617.00.1000",
+      "actual_code": "9617.00.1000"
+    },
+    {
+      "name": "live_classification:NF-DW-003",
+      "passed": true,
+      "expected_outcome": "needs_info",
+      "actual_outcome": "needs_info",
+      "expected_code": null,
+      "actual_code": null
+    },
+    {
+      "name": "live_classification:NF-DW-004",
+      "passed": true,
+      "expected_outcome": "confirmed",
+      "actual_outcome": "confirmed",
+      "expected_code": "9617.00.1000",
+      "actual_code": "9617.00.1000"
+    },
+    {
+      "name": "live_description_edit_changes_review",
+      "passed": true,
+      "actual_outcome": "potential_underpayment",
+      "actual_code": "9617.00.1000"
+    },
+    {
+      "name": "remote_mcp_and_structured_output",
+      "passed": true,
+      "transport": "secure_mcp_tunnel",
+      "successful_calls": [
+        "get_catalog",
+        "get_catalog",
+        "get_catalog",
+        "get_catalog",
+        "get_entries",
+        "get_entries",
+        "get_entries",
+        "get_entries",
+        "search_hts",
+        "search_hts",
+        "search_hts",
+        "search_rulings",
+        "search_rulings",
+        "search_rulings",
+        "get_ruling",
+        "get_ruling"
+      ]
+    }
+  ],
+  "executions": [
+    {
+      "mode": "live_responses_api_remote_mcp",
+      "response_id": "resp_0058a2c10e8ed717006ad52892d26c87d1bee9cca9695d8cfc",
+      "model": "gpt-6.1-sol",
+      "service_tier": "default",
+      "measured_at": "2026-10-18T20:14:51Z",
+      "api_usage": {
+        "input_tokens": 3523,
+        "uncached_input_tokens": 2176,
+        "cached_input_tokens": 0,
+        "cache_write_tokens": 1347,
+        "output_tokens": 1718,
+        "reasoning_tokens": 57,
+        "total_tokens": 5241
+      },
+      "latency_seconds": 41.479,
+      "api_cost_usd": "0.024900",
+      "cost_basis": {
+        "status": "calculated",
+        "pricing_observed_at": "2026-10-18",
+        "pricing_source_url": "https://developers.openai.com/api/docs/pricing",
+        "currency": "USD",
+        "unit": "per_1m_tokens",
+        "context_band": "short_context_up_to_272k_input_tokens",
+        "rates": {
+          "input": "2.00",
+          "cached_input": "0.10",
+          "cache_write": "2.50",
+          "output": "10.00"
+        },
+        "note": "Estimated from API-reported token categories at dated published rates; billing records remain authoritative."
+      }
+    },
+    {
+      "mode": "live_responses_api_remote_mcp",
+      "response_id": "resp_01b468b5cd211fff006ad528bb7c8887d1a5998cf1ddc291b0",
+      "model": "gpt-6.1-sol",
+      "service_tier": "default",
+      "measured_at": "2026-10-18T20:15:21Z",
+      "api_usage": {
+        "input_tokens": 2404,
+        "uncached_input_tokens": 1048,
+        "cached_input_tokens": 1195,
+        "cache_write_tokens": 161,
+        "output_tokens": 810,
+        "reasoning_tokens": 52,
+        "total_tokens": 3214
+      },
+      "latency_seconds": 29.983,
+      "api_cost_usd": "0.010718",
+      "cost_basis": {
+        "status": "calculated",
+        "pricing_observed_at": "2026-10-18",
+        "pricing_source_url": "https://developers.openai.com/api/docs/pricing",
+        "currency": "USD",
+        "unit": "per_1m_tokens",
+        "context_band": "short_context_up_to_272k_input_tokens",
+        "rates": {
+          "input": "2.00",
+          "cached_input": "0.10",
+          "cache_write": "2.50",
+          "output": "10.00"
+        },
+        "note": "Estimated from API-reported token categories at dated published rates; billing records remain authoritative."
+      }
+    }
+  ],
+  "aggregate": {
+    "api_calls": 2,
+    "total_tokens": 8455,
+    "latency_seconds": 71.462,
+    "estimated_api_cost_usd": "0.035618"
+  },
+  "financial_checks": {
+    "potential_overpayment_total": "12480.00",
+    "potential_underpayment_total": "6240.00"
+  },
+  "limitations": [
+    "The four classification cases are synthetic workflow fixtures, not an independent held-out legal benchmark.",
+    "Published-rate cost is an estimate from API token categories; billing records remain authoritative."
+  ]
+}

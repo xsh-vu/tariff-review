@@ -1,0 +1,15 @@
+[
+  {"entry_id":"ENT-1001","client_id":"northfield-home-goods","sku_id":"NF-DW-001","entry_date":"2026-10-18","entered_value":"240000.00","declared_code":"9617.00.1000"},
+  {"entry_id":"ENT-1002","client_id":"northfield-home-goods","sku_id":"NF-DW-002","entry_date":"2026-10-18","entered_value":"120000.00","declared_code":"7323.93.0080"},
+  {"entry_id":"ENT-1003","client_id":"northfield-home-goods","sku_id":"NF-DW-003","entry_date":"2026-10-18","entered_value":"80000.00","declared_code":"7323.93.0080"},
+  {"entry_id":"ENT-1004","client_id":"northfield-home-goods","sku_id":"NF-DW-004","entry_date":"2026-10-18","entered_value":"95000.00","declared_code":"9617.00.1000"},
+  {"entry_id":"ENT-1005","client_id":"northfield-home-goods","sku_id":"NF-PL-001","entry_date":"2026-10-18","entered_value":"180000.00","declared_code":"3924.90.5650"},
+  {"entry_id":"ENT-1006","client_id":"northfield-home-goods","sku_id":"NF-PL-002","entry_date":"2026-10-18","entered_value":"110000.00","declared_code":"3924.90.5650"},
+  {"entry_id":"ENT-1007","client_id":"northfield-home-goods","sku_id":"NF-PL-003","entry_date":"2026-10-18","entered_value":"110000.00","declared_code":"3926.40.0090"},
+  {"entry_id":"ENT-1008","client_id":"northfield-home-goods","sku_id":"NF-PL-004","entry_date":"2026-10-18","entered_value":"70000.00","declared_code":"3926.40.0090"},
+  {"entry_id":"ENT-1009","client_id":"northfield-home-goods","sku_id":"NF-CE-001","entry_date":"2026-10-18","entered_value":"150000.00","declared_code":"6911.10.4500"},
+  {"entry_id":"ENT-1010","client_id":"northfield-home-goods","sku_id":"NF-CE-002","entry_date":"2026-10-18","entered_value":"130000.00","declared_code":"6912.00.4400"},
+  {"entry_id":"ENT-1011","client_id":"northfield-home-goods","sku_id":"NF-CE-003","entry_date":"2026-10-18","entered_value":"75000.00","declared_code":"6912.00.4400"},
+  {"entry_id":"ENT-1012","client_id":"northfield-home-goods","sku_id":"NF-CE-004","entry_date":"2026-10-18","entered_value":"100000.00","declared_code":"6911.10.4500"}
+]
+

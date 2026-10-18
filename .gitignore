@@ -1,0 +1,15 @@
+.env
+.venv/
+.tools/
+.deck-build/
+.chart-data-*/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.streamlit/secrets.toml
+runs/*.json
+drafts/*.json
+!runs/.gitkeep
+!drafts/.gitkeep
+

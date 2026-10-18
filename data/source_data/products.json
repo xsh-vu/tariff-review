@@ -1,0 +1,99 @@
+[
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-DW-001",
+    "name": "Ridge 16 oz Tumbler",
+    "family": "stainless_drinkware",
+    "description": "16 oz stainless-steel drinking tumbler with double-wall construction, screw-on lid, and flat base. Supplier specification confirms there is no vacuum between the walls.",
+    "declared_code": "9617.00.1000"
+  },
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-DW-002",
+    "name": "Summit Vacuum Bottle",
+    "family": "stainless_drinkware",
+    "description": "20 oz stainless-steel bottle, double-walled and vacuum-sealed, with pressure between the walls below atmospheric pressure and a complete protective exterior.",
+    "declared_code": "7323.93.0080"
+  },
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-DW-003",
+    "name": "Everyday Insulated Cup",
+    "family": "stainless_drinkware",
+    "description": "14 oz stainless-steel insulated cup with double-wall construction and lid. Supplier description does not state whether a vacuum is present.",
+    "declared_code": "7323.93.0080"
+  },
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-DW-004",
+    "name": "Trail Vacuum Flask",
+    "family": "stainless_drinkware",
+    "description": "18 oz complete stainless-steel vacuum flask with laboratory-confirmed sub-atmospheric pressure between its walls.",
+    "declared_code": "9617.00.1000"
+  },
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-PL-001",
+    "name": "Harvest Acorn Decor",
+    "family": "plastic_housewares",
+    "description": "Molded polyresin acorn used only as indoor decoration. It has no opening, receptacle function, or other household utility.",
+    "declared_code": "3924.90.5650"
+  },
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-PL-002",
+    "name": "Terrace HDPE Planter",
+    "family": "plastic_housewares",
+    "description": "Reusable HDPE plastic planter with drainage holes, designed to hold soil and grow plants around the home.",
+    "declared_code": "3924.90.5650"
+  },
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-PL-003",
+    "name": "Courtyard Utility Planter",
+    "family": "plastic_housewares",
+    "description": "Reusable polyresin planter with an open receptacle and drainage hole, designed to hold soil and grow plants around the home.",
+    "declared_code": "3926.40.0090"
+  },
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-PL-004",
+    "name": "Garden Gnome Statuette",
+    "family": "plastic_housewares",
+    "description": "Molded polyresin garden gnome statuette used only for ornamentation, with no utilitarian household function.",
+    "declared_code": "3926.40.0090"
+  },
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-CE-001",
+    "name": "Harbor Stoneware Mug",
+    "family": "ceramic_mugs",
+    "description": "Straight-sided 12 oz mug with handle and flat bottom. Supplier laboratory report confirms non-porcelain stoneware composition.",
+    "declared_code": "6911.10.4500"
+  },
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-CE-002",
+    "name": "White Porcelain Mug",
+    "family": "ceramic_mugs",
+    "description": "Straight-sided 11 oz mug with handle and flat bottom. Supplier laboratory report confirms porcelain meeting Chapter 69 Note 5 characteristics.",
+    "declared_code": "6912.00.4400"
+  },
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-CE-003",
+    "name": "Classic Ceramic Mug",
+    "family": "ceramic_mugs",
+    "description": "Straight-sided 13 oz ceramic mug with handle and flat bottom. No body composition, absorption, or translucency evidence was supplied.",
+    "declared_code": "6912.00.4400"
+  },
+  {
+    "client_id": "northfield-home-goods",
+    "sku_id": "NF-CE-004",
+    "name": "Porcelain Cafe Mug",
+    "family": "ceramic_mugs",
+    "description": "Straight-sided 10 oz mug with handle and flat bottom. Supplier laboratory report confirms porcelain meeting Chapter 69 Note 5 characteristics.",
+    "declared_code": "6911.10.4500"
+  }
+]
+

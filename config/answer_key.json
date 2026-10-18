@@ -1,0 +1,14 @@
+{
+  "NF-DW-001": {"expected_outcome":"potential_overpayment","expected_code":"7323.93.0080","evidence_ids":["N224817","N241154","N321134"]},
+  "NF-DW-002": {"expected_outcome":"potential_underpayment","expected_code":"9617.00.1000","evidence_ids":["N224817"]},
+  "NF-DW-003": {"expected_outcome":"needs_info","expected_code":null,"evidence_ids":["N224817","N321134"]},
+  "NF-DW-004": {"expected_outcome":"confirmed","expected_code":"9617.00.1000","evidence_ids":["N224817"]},
+  "NF-PL-001": {"expected_outcome":"potential_underpayment","expected_code":"3926.40.0090","evidence_ids":["N328023","N321767"]},
+  "NF-PL-002": {"expected_outcome":"confirmed","expected_code":"3924.90.5650","evidence_ids":["N328023","N283412"]},
+  "NF-PL-003": {"expected_outcome":"potential_overpayment","expected_code":"3924.90.5650","evidence_ids":["N328023","N283412"]},
+  "NF-PL-004": {"expected_outcome":"confirmed","expected_code":"3926.40.0090","evidence_ids":["N321767"]},
+  "NF-CE-001": {"expected_outcome":"potential_overpayment","expected_code":"6912.00.4400","evidence_ids":["L85060","N295888"]},
+  "NF-CE-002": {"expected_outcome":"potential_underpayment","expected_code":"6911.10.4500","evidence_ids":["L85060","N295888"]},
+  "NF-CE-003": {"expected_outcome":"needs_info","expected_code":null,"evidence_ids":["L85060","N295888"]},
+  "NF-CE-004": {"expected_outcome":"confirmed","expected_code":"6911.10.4500","evidence_ids":["L85060"]}
+}

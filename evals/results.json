@@ -1,0 +1,126 @@
+{
+  "evaluation_mode": "deterministic_fixture_only",
+  "openai_api_evaluation": false,
+  "measured_at": "2026-10-18T20:21:15Z",
+  "elapsed_seconds": 0.001182,
+  "summary": {
+    "passed": 14,
+    "total": 14
+  },
+  "cases": [
+    {
+      "name": "classification:NF-DW-001",
+      "passed": true,
+      "expected_outcome": "potential_overpayment",
+      "actual_outcome": "potential_overpayment",
+      "expected_code": "7323.93.0080",
+      "actual_code": "7323.93.0080"
+    },
+    {
+      "name": "classification:NF-DW-002",
+      "passed": true,
+      "expected_outcome": "potential_underpayment",
+      "actual_outcome": "potential_underpayment",
+      "expected_code": "9617.00.1000",
+      "actual_code": "9617.00.1000"
+    },
+    {
+      "name": "classification:NF-DW-003",
+      "passed": true,
+      "expected_outcome": "needs_info",
+      "actual_outcome": "needs_info",
+      "expected_code": null,
+      "actual_code": null
+    },
+    {
+      "name": "classification:NF-DW-004",
+      "passed": true,
+      "expected_outcome": "confirmed",
+      "actual_outcome": "confirmed",
+      "expected_code": "9617.00.1000",
+      "actual_code": "9617.00.1000"
+    },
+    {
+      "name": "classification:NF-PL-001",
+      "passed": true,
+      "expected_outcome": "potential_underpayment",
+      "actual_outcome": "potential_underpayment",
+      "expected_code": "3926.40.0090",
+      "actual_code": "3926.40.0090"
+    },
+    {
+      "name": "classification:NF-PL-002",
+      "passed": true,
+      "expected_outcome": "confirmed",
+      "actual_outcome": "confirmed",
+      "expected_code": "3924.90.5650",
+      "actual_code": "3924.90.5650"
+    },
+    {
+      "name": "classification:NF-PL-003",
+      "passed": true,
+      "expected_outcome": "potential_overpayment",
+      "actual_outcome": "potential_overpayment",
+      "expected_code": "3924.90.5650",
+      "actual_code": "3924.90.5650"
+    },
+    {
+      "name": "classification:NF-PL-004",
+      "passed": true,
+      "expected_outcome": "confirmed",
+      "actual_outcome": "confirmed",
+      "expected_code": "3926.40.0090",
+      "actual_code": "3926.40.0090"
+    },
+    {
+      "name": "classification:NF-CE-001",
+      "passed": true,
+      "expected_outcome": "potential_overpayment",
+      "actual_outcome": "potential_overpayment",
+      "expected_code": "6912.00.4400",
+      "actual_code": "6912.00.4400"
+    },
+    {
+      "name": "classification:NF-CE-002",
+      "passed": true,
+      "expected_outcome": "potential_underpayment",
+      "actual_outcome": "potential_underpayment",
+      "expected_code": "6911.10.4500",
+      "actual_code": "6911.10.4500"
+    },
+    {
+      "name": "classification:NF-CE-003",
+      "passed": true,
+      "expected_outcome": "needs_info",
+      "actual_outcome": "needs_info",
+      "expected_code": null,
+      "actual_code": null
+    },
+    {
+      "name": "classification:NF-CE-004",
+      "passed": true,
+      "expected_outcome": "confirmed",
+      "actual_outcome": "confirmed",
+      "expected_code": "6911.10.4500",
+      "actual_code": "6911.10.4500"
+    },
+    {
+      "name": "live_description_edit_changes_review",
+      "passed": true
+    },
+    {
+      "name": "prompt_injection_text_does_not_force_classification",
+      "passed": true
+    }
+  ],
+  "financial_checks": {
+    "potential_overpayment_total": "20570.00",
+    "potential_underpayment_total": "14860.00"
+  },
+  "api_usage": null,
+  "api_cost_usd": null,
+  "limitations": [
+    "These measurements exercise deterministic fixture logic, not a model.",
+    "Live Responses API latency, cost, and correctness remain unmeasured until configured."
+  ]
+}

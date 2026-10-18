@@ -1,0 +1,9 @@
+openai>=2.0,<3
+mcp>=2.0,<3
+# Latest v50 has no prebuilt Intel-macOS wheel in this environment.
+cryptography>=46,<47
+pydantic>=2.11,<3
+python-dotenv>=1,<2
+streamlit>=1.49,<2
+pytest>=8,<9
+
