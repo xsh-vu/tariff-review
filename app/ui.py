@@ -18,6 +18,11 @@ if str(REPOSITORY_ROOT) not in sys.path:
 
 from agent.client import PendingDraft, TariffReviewClient, live_configuration_status
 from agent.fixture_review import FixtureReviewer
+from app.evaluation_results import (
+    EvaluationResultError,
+    load_published_historical_result,
+    nonmatching_case_rows,
+)
 from data.repository import PROJECT_ROOT, Repository
 from server import tools as local_tools
 
@@ -222,6 +227,14 @@ st.html(
         );
         border-color: rgba(14, 116, 144, 0.32) !important;
         box-shadow: 0 8px 24px rgba(14, 116, 144, 0.08);
+    }
+    .st-key-historical_evaluation {
+        background: linear-gradient(
+            135deg,
+            rgba(37, 99, 235, 0.08),
+            rgba(14, 116, 144, 0.04)
+        );
+        border-color: rgba(59, 130, 246, 0.28) !important;
     }
     .st-key-products_to_review [data-tag] {
         background-color: rgba(37, 99, 235, 0.72) !important;
@@ -454,6 +467,99 @@ def render_execution_metrics(review: dict[str, Any]) -> None:
                 )
 
 
+def render_historical_evaluation() -> None:
+    try:
+        result = load_published_historical_result()
+    except EvaluationResultError as exc:
+        st.warning(f"Historical evaluation evidence is unavailable: {exc}")
+        return
+
+    summary = result["summary"]
+    mcp = result["mcp_reliability"]
+    execution = result["execution"]
+    total = summary["total_cases"]
+    exact = summary["exact_matches"]
+    citation_valid = summary["valid_citations"]
+
+    with st.container(border=True, key="historical_evaluation"):
+        st.subheader("Tested against past customs rulings")
+        st.caption(
+            "Pre-recorded held-out evaluation · not rerun during this demo · "
+            f"{display_run_time(result['started_at'])}"
+        )
+        st.write(
+            "We gave the same model sanitized product facts from 20 past CBP "
+            "classification cases. The model could search dated tariff evidence and "
+            "analogous rulings through MCP, but it could not search the target ruling "
+            "or see the hidden answer until after each response was saved."
+        )
+
+        accuracy_col, citation_col, mcp_col, leakage_col = st.columns(4)
+        accuracy_col.metric(
+            "Exact classifications",
+            f"{exact}/{total}",
+            f"{summary['exact_match_rate_all_eligible_percent']}%",
+        )
+        citation_col.metric("Citations validated", f"{citation_valid}/{total}")
+        mcp_col.metric(
+            "MCP calls succeeded",
+            f"{mcp['successful_calls']}/{mcp['expected_calls']}",
+        )
+        leakage_col.metric("Hidden-answer leaks", summary["target_ruling_leaks"])
+
+        st.progress(
+            exact / total if total else 0,
+            text=(
+                f"{exact} of {total} historical classifications matched the "
+                "ruling-date answer exactly."
+            ),
+        )
+        st.caption(
+            f"Model: {result['model']} · one 20-case run · selected from the "
+            "three demo product families. This is useful prototype evidence, not a "
+            "claim of broad customs-classification accuracy."
+        )
+
+        with st.expander("See misses, method, and execution measurements"):
+            misses = nonmatching_case_rows(result)
+            st.markdown("**Cases that did not exactly match**")
+            if misses:
+                st.dataframe(misses, hide_index=True, width="stretch")
+            else:
+                st.success("Every case matched exactly.")
+            st.caption(
+                "Citation validation is mechanical: each cited identifier had to be "
+                "returned by MCP. It does not mean every analogy was legally persuasive."
+            )
+
+            latency_col, tokens_col, cost_col = st.columns(3)
+            latency_col.metric(
+                "Evaluation latency",
+                f"{execution['p50_latency_seconds']} s p50",
+                f"{execution['p95_latency_seconds']} s p95",
+            )
+            tokens_col.metric("Evaluation tokens", f"{execution['total_tokens']:,}")
+            cost_col.metric(
+                "Estimated evaluation cost",
+                f"${execution['estimated_api_cost_usd']}",
+            )
+            st.markdown(
+                "**What this run also checked:** dated HTS evidence, strict structured "
+                "output, retrieved-citation provenance, MCP call completion, and "
+                "hidden-answer leakage."
+            )
+            st.markdown("**Important limitations**")
+            for limitation in result["limitations"]:
+                st.markdown(f"- {limitation}")
+            basis = execution.get("cost_basis") or {}
+            if basis.get("pricing_observed_at"):
+                st.caption(
+                    "Estimated cost uses published OpenAI rates observed "
+                    f"{basis['pricing_observed_at']}; billing records remain "
+                    "authoritative."
+                )
+
+
 def render_review_tab() -> None:
     products = repository.get_catalog("northfield-home-goods")
     product_by_id = {product["sku_id"]: product for product in products}
@@ -637,6 +743,8 @@ def render_execution_tab() -> None:
         st.info(
             "Run a tariff review to see its measured OpenAI execution details here."
         )
+    st.divider()
+    render_historical_evaluation()
 
 
 review_tab, execution_tab = st.tabs(["Tariff review", "OpenAI execution details"])

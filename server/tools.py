@@ -5,14 +5,22 @@ import json
 import os
 import uuid
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Annotated, Any, TypedDict
+
+from pydantic import Field
 
 from data.duty import DutyCalculator
-from data.repository import DataError, PROJECT_ROOT, Repository
+from data.repository import (
+    DataError,
+    HistoricalEvidenceRepository,
+    PROJECT_ROOT,
+    Repository,
+)
 from server.approval import ApprovalStore
 
 
 repository = Repository()
+historical_repository = HistoricalEvidenceRepository()
 calculator = DutyCalculator(repository)
 approval_store = ApprovalStore(
     Path(os.getenv("APPROVAL_STORE_PATH", PROJECT_ROOT / "runs" / "approvals.json"))
@@ -29,6 +37,10 @@ class EntryResult(TypedDict):
 
 class BatchSearchResult(TypedDict):
     results: list[dict[str, Any]]
+
+
+BatchQueries = Annotated[list[str], Field(min_length=1, max_length=12)]
+BatchLimit = Annotated[int, Field(ge=1, le=8)]
 
 
 def get_catalog(
@@ -78,7 +90,7 @@ def search_hts(query: str, limit: int = 8) -> list[dict[str, Any]]:
 
 
 def search_hts_batch(
-    queries: list[str], limit_per_query: int = 8
+    queries: BatchQueries, limit_per_query: BatchLimit = 8
 ) -> BatchSearchResult:
     """Search verified HTS records for several code or product-term queries."""
     normalized = _validate_batch_queries(queries, limit_per_query)
@@ -93,6 +105,31 @@ def search_hts_batch(
     }
 
 
+def search_historical_hts(
+    as_of_date: str, queries: BatchQueries, limit_per_query: BatchLimit = 8
+) -> dict[str, Any]:
+    """Search a verified, date-bounded HTS cache for held-out evaluations."""
+    normalized = _validate_batch_queries(queries, limit_per_query)
+    snapshot = historical_repository.snapshot_for(as_of_date)
+    return {
+        "dataset_id": historical_repository.dataset_id,
+        "dataset_version": historical_repository.version,
+        "as_of_date": as_of_date,
+        "revision_id": snapshot["revision_id"],
+        "revision_published_on": snapshot["published_on"],
+        "source_url": snapshot["source_url"],
+        "results": [
+            {
+                "query": query,
+                "matches": historical_repository.search_hts(
+                    as_of_date, query, limit_per_query
+                ),
+            }
+            for query in normalized
+        ],
+    }
+
+
 def search_rulings(
     query: str, family: str | None = None, limit: int = 8
 ) -> list[dict[str, Any]]:
@@ -101,7 +138,7 @@ def search_rulings(
 
 
 def search_rulings_batch(
-    queries: list[str], limit_per_query: int = 8
+    queries: BatchQueries, limit_per_query: BatchLimit = 8
 ) -> BatchSearchResult:
     """Return full verified CBP rulings for several ID, family, or fact queries."""
     normalized = _validate_batch_queries(queries, limit_per_query)

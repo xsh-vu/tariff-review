@@ -318,13 +318,13 @@ Do not begin stretch work until the core demo passes. Stretch candidates: full-c
 | Deterministic rate calculation | Reproducible financial figures and clear trust boundary | Implemented and unit-tested |
 | Broker-approved drafts only | Keeps consequential compliance decisions with authorized humans | Implemented with expiring single-use tokens |
 | Base-duty-only initial scope | Defensible, bounded financial calculation | Implemented |
-| Held-out ruling evaluation | Measures generalization rather than memorized lookup | 20 source-verified cases isolated from MCP search; model bake-off and licensed-broker review pending |
+| Held-out ruling evaluation | Measures generalization rather than memorized lookup | Separate two-tool runner implemented; clean `gpt-6.1-sol` run measured 17/20 exact and 40/40 successful MCP calls; repeated model bake-off and licensed-broker review pending |
 | Premium-audit business model | Links the workflow to incremental brokerage revenue | Implemented with clearly illustrative economics |
 
 ## 14. Remaining questions before the live demo
 
 1. **Production identity:** Separate long-lived tunnel and application credentials, define rotation, and scope each identity to least privilege.
-2. **Independent evaluation:** Run the 20-case held-out set across candidate models, repeat stochastic runs, and obtain licensed-broker review before making classification-accuracy or generalization claims.
+2. **Independent evaluation:** Repeat the 20-case held-out set across candidate models, run multiple samples, and obtain licensed-broker review before making classification-accuracy or generalization claims. The first single-run `gpt-6.1-sol` result is technical evidence, not a production accuracy estimate.
 3. **Production recovery:** Define reconciliation for an API/network failure after a write tool may have executed; the prototype's single-use local token prevents duplicate drafts.
 4. **Broader duty scope:** Chapter 99 duties, trade remedies, origin, preferences, deadlines, and legal recoverability remain intentionally excluded.
 

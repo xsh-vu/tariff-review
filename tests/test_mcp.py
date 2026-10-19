@@ -15,12 +15,28 @@ def test_in_memory_mcp_discovery_and_calculator_call() -> None:
                 "get_entries",
                 "search_hts",
                 "search_hts_batch",
+                "search_historical_hts",
                 "search_rulings",
                 "search_rulings_batch",
                 "get_ruling",
                 "compute_duty_delta",
                 "draft_correction",
             } <= names
+            historical_tool = next(
+                tool for tool in listed.tools if tool.name == "search_historical_hts"
+            )
+            assert historical_tool.input_schema["properties"]["queries"][
+                "minItems"
+            ] == 1
+            assert historical_tool.input_schema["properties"]["queries"][
+                "maxItems"
+            ] == 12
+            assert historical_tool.input_schema["properties"]["limit_per_query"][
+                "minimum"
+            ] == 1
+            assert historical_tool.input_schema["properties"]["limit_per_query"][
+                "maximum"
+            ] == 8
             result = await client.call_tool(
                 "compute_duty_delta",
                 {

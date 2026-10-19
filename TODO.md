@@ -74,6 +74,9 @@
 - [x] Separate sanitized model inputs from ruling IDs, codes, rates, and holdings.
 - [x] Verify official source URLs, ruling-date codes, and CBP status fields.
 - [x] Add deterministic checks for corpus overlap and gold-label leakage.
+- [x] Build and run the isolated Responses API + two-tool MCP historical-case runner.
+- [x] Record initial classification, citation, MCP reliability, latency, usage, cost, and failure results.
+- [x] Publish the pinned clean historical result in the OpenAI execution details tab.
 - [ ] Obtain licensed-customs-broker review of the case facts and gold labels.
 - [ ] Run repeated GPT-6 Luna, GPT-6.1 Sol, and GPT-6 Astra comparisons.
 - [ ] Record exact-code and six-digit accuracy, abstentions, citations, latency, usage, cost, and failures.

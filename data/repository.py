@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from copy import deepcopy
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -166,4 +167,93 @@ class Repository:
             if rate["code"] == code:
                 return deepcopy(rate)
         raise DataError(f"Unsupported HTS code: {code}")
+
+
+class HistoricalEvidenceRepository:
+    """Date-bounded HTS evidence used only by the held-out evaluation runner."""
+
+    def __init__(self) -> None:
+        self._document: dict[str, Any] = _load_json("historical_hts.json")
+
+    @property
+    def dataset_id(self) -> str:
+        return str(self._document["dataset_id"])
+
+    @property
+    def version(self) -> int:
+        return int(self._document["version"])
+
+    def snapshot_for(self, as_of_date: str) -> dict[str, Any]:
+        try:
+            requested = date.fromisoformat(as_of_date)
+        except (TypeError, ValueError) as exc:
+            raise DataError("as_of_date must be an ISO date") from exc
+
+        matches = []
+        for snapshot in self._document["snapshots"]:
+            valid_from = date.fromisoformat(snapshot["valid_from"])
+            valid_through = date.fromisoformat(snapshot["valid_through"])
+            if valid_from <= requested <= valid_through:
+                matches.append(snapshot)
+        if len(matches) != 1:
+            raise DataError(
+                f"No unique verified historical HTS snapshot for {as_of_date}"
+            )
+        snapshot = matches[0]
+        if date.fromisoformat(snapshot["published_on"]) > requested:
+            raise DataError(
+                f"Historical HTS snapshot for {as_of_date} was published later"
+            )
+        return deepcopy(snapshot)
+
+    def search_hts(
+        self, as_of_date: str, query: str, limit: int = 8
+    ) -> list[dict[str, Any]]:
+        snapshot = self.snapshot_for(as_of_date)
+        normalized = query.strip().lower()
+        if not normalized:
+            raise DataError("query must not be empty")
+        if not 1 <= limit <= 20:
+            raise DataError("limit must be between 1 and 20")
+        requested = date.fromisoformat(as_of_date)
+        scored = []
+        for index, item in enumerate(self._document["provisions"]):
+            available_from = date.fromisoformat(item["available_from"])
+            available_through = (
+                date.fromisoformat(item["available_through"])
+                if item["available_through"]
+                else None
+            )
+            if requested < available_from or (
+                available_through is not None and requested > available_through
+            ):
+                continue
+            score = _search_score(
+                normalized,
+                " ".join(
+                    [
+                        item["code"],
+                        item["description"],
+                        item["search_terms"],
+                    ]
+                ),
+            )
+            if score:
+                record = {
+                    key: deepcopy(value)
+                    for key, value in item.items()
+                    if key not in {"available_from", "available_through", "search_terms"}
+                }
+                record.update(
+                    {
+                        "as_of_date": as_of_date,
+                        "revision_id": snapshot["revision_id"],
+                        "revision_published_on": snapshot["published_on"],
+                        "source_url": snapshot["source_url"],
+                        "verification_method": snapshot["verification_method"],
+                    }
+                )
+                scored.append((score, index, record))
+        scored.sort(key=lambda match: (-match[0], match[1]))
+        return [record for _, _, record in scored[:limit]]
 

@@ -257,10 +257,14 @@ Initial calculations cover **Column 1 General base-duty rate differences only**.
 A 20-case historical CBP CROSS set is isolated from the searchable evidence
 corpus. It covers the three demo product families and stores sanitized facts
 separately from official ruling IDs, historical codes, and holdings. The cases
-have been source-verified against official CBP records, but have not yet been
-run against a model or reviewed by a licensed customs broker. Report exact and
-six-digit classification scores, sample size, repeat count, and limitations;
-do not present this selected set as broad classification-accuracy evidence.
+have been source-verified against official CBP records. An initial live
+`gpt-6.1-sol` run and a clean post-MCP-schema-fix run were recorded on October
+19, 2026; the clean run produced 17/20 exact classifications and 40/40
+successful MCP evidence calls. The labels have not been reviewed by a licensed
+customs broker, and candidate-model/repeated-run comparison remains pending.
+Report exact and six-digit classification scores, sample size, repeat count,
+MCP reliability, and limitations; do not present this selected set as broad
+classification-accuracy evidence.
 
 ### Workflow scenario evaluation
 

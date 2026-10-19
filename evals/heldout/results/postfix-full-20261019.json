@@ -1,0 +1,612 @@
+{
+  "evaluation_mode": "historical_cbp_cross_responses_api_remote_mcp",
+  "dataset_id": "cbp-cross-heldout-v1",
+  "dataset_version": 1,
+  "run_id": "HIST-20261019T230540Z-5CDC39FE",
+  "model": "gpt-6.1-sol",
+  "started_at": "2026-10-19T23:05:40Z",
+  "responses_persisted_at": "2026-10-19T23:09:21Z",
+  "graded_at": "2026-10-19T23:10:09Z",
+  "answer_key_loaded_after_responses_persisted": true,
+  "summary": {
+    "total_cases": 20,
+    "evidence_eligible_cases": 20,
+    "evidence_gap_cases": 0,
+    "evaluated_responses": 20,
+    "exact_matches": 17,
+    "exact_match_rate_all_eligible_percent": 85.0,
+    "exact_match_rate_completed_percent": 85.0,
+    "six_digit_matches": 17,
+    "six_digit_match_rate_all_eligible_percent": 85.0,
+    "valid_citations": 20,
+    "unsupported_confident_errors": 2,
+    "target_ruling_leaks": 0
+  },
+  "mcp_reliability": {
+    "expected_calls": 40,
+    "attempted_calls": 40,
+    "successful_calls": 40,
+    "success_rate_expected_percent": 100.0
+  },
+  "execution": {
+    "api_responses": 20,
+    "total_tokens": 57563,
+    "estimated_api_cost_usd": "0.165598",
+    "costs_unavailable_for_responses": 0,
+    "cost_basis": {
+      "status": "calculated",
+      "pricing_observed_at": "2026-10-18",
+      "pricing_source_url": "https://developers.openai.com/api/docs/pricing",
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "context_band": "short_context_up_to_272k_input_tokens",
+      "rates": {
+        "input": "2.00",
+        "cached_input": "0.10",
+        "cache_write": "2.50",
+        "output": "10.00"
+      },
+      "note": "Estimated from API-reported token categories at dated published rates; billing records remain authoritative."
+    },
+    "mean_latency_seconds": 11.07,
+    "p50_latency_seconds": 9.256,
+    "p95_latency_seconds": 16.059
+  },
+  "cases": [
+    {
+      "case_id": "PR-DW-001",
+      "family": "stainless_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "9617.00.1000",
+      "expected_six_digit_code": "9617.00",
+      "actual_code": "9617.00.1000",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N224817"
+      ],
+      "hts_evidence_ids": [
+        "HTS-9617.00.1000"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N356922",
+      "failure": null
+    },
+    {
+      "case_id": "PR-DW-002",
+      "family": "stainless_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "9617.00.1000",
+      "expected_six_digit_code": "9617.00",
+      "actual_code": "9617.00.1000",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N224817"
+      ],
+      "hts_evidence_ids": [
+        "HTS-9617.00.1000"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N349684",
+      "failure": null
+    },
+    {
+      "case_id": "PR-DW-003",
+      "family": "stainless_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "9617.00.10",
+      "expected_six_digit_code": "9617.00",
+      "actual_code": "9617.00.10",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N224817"
+      ],
+      "hts_evidence_ids": [
+        "HTS-1999-9617.00.10"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/962648",
+      "failure": null
+    },
+    {
+      "case_id": "PR-DW-004",
+      "family": "stainless_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "7323.93.0080",
+      "expected_six_digit_code": "7323.93",
+      "actual_code": "3924.90.5650",
+      "exact_match": false,
+      "six_digit_match": false,
+      "abstained": false,
+      "unsupported_confident_error": true,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N241154"
+      ],
+      "hts_evidence_ids": [
+        "HTS-3924.90.5650",
+        "HTS-9617.00.1000"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N218293",
+      "failure": null
+    },
+    {
+      "case_id": "PR-DW-005",
+      "family": "stainless_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "7323.93.0080",
+      "expected_six_digit_code": "7323.93",
+      "actual_code": "7323.93.0080",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N241154"
+      ],
+      "hts_evidence_ids": [
+        "HTS-7323.93.0080"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N269864",
+      "failure": null
+    },
+    {
+      "case_id": "PR-DW-006",
+      "family": "stainless_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "7323.93.0080",
+      "expected_six_digit_code": "7323.93",
+      "actual_code": null,
+      "exact_match": false,
+      "six_digit_match": false,
+      "abstained": true,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N224817"
+      ],
+      "hts_evidence_ids": [
+        "HTS-9617.00.1000"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N297166",
+      "failure": null
+    },
+    {
+      "case_id": "PR-DW-007",
+      "family": "stainless_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "9617.00.1000",
+      "expected_six_digit_code": "9617.00",
+      "actual_code": "9617.00.1000",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N224817"
+      ],
+      "hts_evidence_ids": [
+        "HTS-9617.00.1000"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N357245",
+      "failure": null
+    },
+    {
+      "case_id": "PR-PL-001",
+      "family": "plastic_housewares",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "3924.90.5650",
+      "expected_six_digit_code": "3924.90",
+      "actual_code": "3924.90.5650",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N283412",
+        "N328023"
+      ],
+      "hts_evidence_ids": [
+        "HTS-3924.90.5650"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N338807",
+      "failure": null
+    },
+    {
+      "case_id": "PR-PL-002",
+      "family": "plastic_housewares",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "3924.90.5650",
+      "expected_six_digit_code": "3924.90",
+      "actual_code": "3924.90.5650",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N283412"
+      ],
+      "hts_evidence_ids": [
+        "HTS-3924.90.5650"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N302665",
+      "failure": null
+    },
+    {
+      "case_id": "PR-PL-003",
+      "family": "plastic_housewares",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "3924.90.5650",
+      "expected_six_digit_code": "3924.90",
+      "actual_code": "3924.90.5650",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N283412"
+      ],
+      "hts_evidence_ids": [
+        "HTS-3924.90.5650"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N289553",
+      "failure": null
+    },
+    {
+      "case_id": "PR-PL-004",
+      "family": "plastic_housewares",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "3924.90.5650",
+      "expected_six_digit_code": "3924.90",
+      "actual_code": "3924.90.5650",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N283412"
+      ],
+      "hts_evidence_ids": [
+        "HTS-3924.90.5650"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N277216",
+      "failure": null
+    },
+    {
+      "case_id": "PR-PL-005",
+      "family": "plastic_housewares",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "3924.90.5650",
+      "expected_six_digit_code": "3924.90",
+      "actual_code": "3924.90.5650",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N328023",
+        "N283412"
+      ],
+      "hts_evidence_ids": [
+        "HTS-3924.90.5650"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N173957",
+      "failure": null
+    },
+    {
+      "case_id": "PR-PL-006",
+      "family": "plastic_housewares",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "3926.40.0090",
+      "expected_six_digit_code": "3926.40",
+      "actual_code": "3926.40.0090",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N321767"
+      ],
+      "hts_evidence_ids": [
+        "HTS-3926.40.0090"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N277786",
+      "failure": null
+    },
+    {
+      "case_id": "PR-PL-007",
+      "family": "plastic_housewares",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "3926.40.0090",
+      "expected_six_digit_code": "3926.40",
+      "actual_code": "3924.90.5650",
+      "exact_match": false,
+      "six_digit_match": false,
+      "abstained": false,
+      "unsupported_confident_error": true,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "H296920",
+        "N328023"
+      ],
+      "hts_evidence_ids": [
+        "HTS-3924.90.5650"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N267258",
+      "failure": null
+    },
+    {
+      "case_id": "PR-CE-001",
+      "family": "ceramic_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "6911.10.8010",
+      "expected_six_digit_code": "6911.10",
+      "actual_code": "6911.10.8010",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "L85060"
+      ],
+      "hts_evidence_ids": [
+        "HTS-6911.10.8010"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N347310",
+      "failure": null
+    },
+    {
+      "case_id": "PR-CE-002",
+      "family": "ceramic_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "6911.10.2500",
+      "expected_six_digit_code": "6911.10",
+      "actual_code": "6911.10.2500",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N241154"
+      ],
+      "hts_evidence_ids": [
+        "HTS-6911.10.2500",
+        "HTS-9617.00.1000"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N276348",
+      "failure": null
+    },
+    {
+      "case_id": "PR-CE-003",
+      "family": "ceramic_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "6912.00.4400",
+      "expected_six_digit_code": "6912.00",
+      "actual_code": "6912.00.4400",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N295888"
+      ],
+      "hts_evidence_ids": [
+        "HTS-6912.00.4400"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N262709",
+      "failure": null
+    },
+    {
+      "case_id": "PR-CE-004",
+      "family": "ceramic_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "6912.00.4500",
+      "expected_six_digit_code": "6912.00",
+      "actual_code": "6912.00.4500",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N295888"
+      ],
+      "hts_evidence_ids": [
+        "HTS-6912.00.4500",
+        "HTS-6912.00.4400"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N326579",
+      "failure": null
+    },
+    {
+      "case_id": "PR-CE-005",
+      "family": "ceramic_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "6912.00.4810",
+      "expected_six_digit_code": "6912.00",
+      "actual_code": "6912.00.4810",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N295888"
+      ],
+      "hts_evidence_ids": [
+        "HTS-6912.00.4810",
+        "HTS-6912.00.4400",
+        "HTS-6912.00.4500"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N323611",
+      "failure": null
+    },
+    {
+      "case_id": "PR-CE-006",
+      "family": "ceramic_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "6912.00.4500",
+      "expected_six_digit_code": "6912.00",
+      "actual_code": "6912.00.4500",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N295888"
+      ],
+      "hts_evidence_ids": [
+        "HTS-6912.00.4500",
+        "HTS-6912.00.4400"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N360981",
+      "failure": null
+    }
+  ],
+  "limitations": [
+    "The 20 cases are selected from three demo product families and are not a random sample of customs classifications.",
+    "The target rulings are excluded from MCP search, but public rulings may have appeared in base-model training data.",
+    "Source verification is not licensed-broker review; broker review remains pending.",
+    "Classification accuracy, MCP reliability, and evidence coverage are reported separately."
+  ]
+}

@@ -1,0 +1,267 @@
+{
+  "dataset_id": "heldout-historical-hts-v1",
+  "version": 1,
+  "observed_on": "2026-10-19",
+  "scope": "Base Chapter 1-97 HTSUS provisions relevant to the held-out evaluation families. Rates are preserved as source metadata but are not used to grade classification.",
+  "archive_url": "https://www.usitc.gov/harmonized_tariff_information/hts/archive/list",
+  "limitations": [
+    "This is a compact extracted evidence cache, not a complete historical HTSUS.",
+    "A snapshot is usable only for the explicit date range recorded below.",
+    "Older editions without a machine-readable download were cross-checked against the official USITC release page and the official CBP ruling text; those records are labeled accordingly.",
+    "Chapter 99 provisions, special programs, trade remedies, and financial calculations are outside this evaluation cache."
+  ],
+  "snapshots": [
+    {
+      "revision_id": "1999 HTSA Basic Publication",
+      "published_on": "1999-02-01",
+      "valid_from": "1999-02-01",
+      "valid_through": "1999-12-31",
+      "source_url": "https://www.usitc.gov/tata/hts/archive/9900/1999_basic_index.htm",
+      "verification_method": "official USITC archive plus official CBP CROSS tariff text"
+    },
+    {
+      "revision_id": "2011 HTSA Revision 1",
+      "published_on": "2011-06-27",
+      "valid_from": "2011-06-27",
+      "valid_through": "2011-12-31",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/1101_hts_delimited.txt",
+      "verification_method": "official USITC delimited download"
+    },
+    {
+      "revision_id": "2012 HTSA Supplement 1",
+      "published_on": "2012-06-28",
+      "valid_from": "2012-06-28",
+      "valid_through": "2012-10-22",
+      "source_url": "https://www.usitc.gov/tata/hts/bychapter/supplement_112.htm",
+      "verification_method": "official USITC release page plus official CBP CROSS tariff text"
+    },
+    {
+      "revision_id": "2015 HTSA Basic Edition",
+      "published_on": "2015-01-26",
+      "valid_from": "2015-01-26",
+      "valid_through": "2015-06-29",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/2015_htsa_basic_delimited_0.txt",
+      "verification_method": "official USITC delimited download"
+    },
+    {
+      "revision_id": "2015 HTSA Revision 1",
+      "published_on": "2015-06-30",
+      "valid_from": "2015-06-30",
+      "valid_through": "2015-10-05",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/1501_hts_delimited.txt",
+      "verification_method": "official USITC delimited download"
+    },
+    {
+      "revision_id": "2015 HTSA Revision 2",
+      "published_on": "2015-10-06",
+      "valid_from": "2015-10-06",
+      "valid_through": "2015-12-31",
+      "source_url": "https://hts.usitc.gov/view/release?release=Presproc",
+      "verification_method": "official USITC release plus official CBP CROSS tariff text"
+    },
+    {
+      "revision_id": "2016 HTSA Basic Edition",
+      "published_on": "2016-03-21",
+      "valid_from": "2016-03-21",
+      "valid_through": "2016-08-22",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/hts_2016_basic_delimited.csv",
+      "verification_method": "official USITC delimited download"
+    },
+    {
+      "revision_id": "2016 HTSA Supplement",
+      "published_on": "2016-08-23",
+      "valid_from": "2016-08-23",
+      "valid_through": "2016-12-31",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/hts_2016_supplemental_0.json",
+      "verification_method": "official USITC JSON download"
+    },
+    {
+      "revision_id": "2017 HTSA Basic Edition",
+      "published_on": "2017-02-09",
+      "valid_from": "2017-02-09",
+      "valid_through": "2017-10-30",
+      "source_url": "https://hts.usitc.gov/view/release?release=basicCorrections2",
+      "verification_method": "official USITC release plus official CBP CROSS tariff text"
+    },
+    {
+      "revision_id": "2018 HTSA Revision 3",
+      "published_on": "2018-04-25",
+      "valid_from": "2018-04-25",
+      "valid_through": "2018-06-06",
+      "source_url": "https://hts.usitc.gov/view/release?release=2018HTSARevision3",
+      "verification_method": "official USITC release plus official CBP CROSS tariff text"
+    },
+    {
+      "revision_id": "2018 HTSA Revision 5",
+      "published_on": "2018-06-07",
+      "valid_from": "2018-06-07",
+      "valid_through": "2018-06-28",
+      "source_url": "https://hts.usitc.gov/view/release?release=2018HTSARevision5_1",
+      "verification_method": "official USITC release plus official CBP CROSS tariff text"
+    },
+    {
+      "revision_id": "2019 HTSA Basic Edition",
+      "published_on": "2019-02-15",
+      "valid_from": "2019-02-15",
+      "valid_through": "2019-03-24",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/hts_2019_basic_data.json",
+      "verification_method": "official USITC JSON download"
+    },
+    {
+      "revision_id": "2022 HTSA Preliminary Edition",
+      "published_on": "2022-01-05",
+      "valid_from": "2022-01-05",
+      "valid_through": "2022-01-25",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/hts_2022_preliminary_json.json",
+      "verification_method": "official USITC JSON download"
+    },
+    {
+      "revision_id": "2022 HTSA Revision 5",
+      "published_on": "2022-06-03",
+      "valid_from": "2022-06-03",
+      "valid_through": "2022-06-29",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/hts_2022_revision_5_json.json",
+      "verification_method": "official USITC JSON download"
+    },
+    {
+      "revision_id": "2024 HTSA Revision 1",
+      "published_on": "2024-01-25",
+      "valid_from": "2024-01-25",
+      "valid_through": "2024-05-30",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/hts_2024_revision_1_json.json",
+      "verification_method": "official USITC JSON download"
+    },
+    {
+      "revision_id": "2025 HTS Revision 10",
+      "published_on": "2025-04-15",
+      "valid_from": "2025-04-15",
+      "valid_through": "2025-05-01",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/hts_2025_revision_10_json.json",
+      "verification_method": "official USITC JSON download"
+    },
+    {
+      "revision_id": "2025 HTS Revision 24",
+      "published_on": "2025-09-25",
+      "valid_from": "2025-09-25",
+      "valid_through": "2025-10-12",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/hts_2025_revision_24_json.json",
+      "verification_method": "official USITC JSON download"
+    },
+    {
+      "revision_id": "2026 HTS Revision 1",
+      "published_on": "2026-01-16",
+      "valid_from": "2026-01-16",
+      "valid_through": "2026-01-29",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/hts_2026_revision_1_json.json",
+      "verification_method": "official USITC JSON download"
+    },
+    {
+      "revision_id": "2026 HTS Revision 7",
+      "published_on": "2026-04-29",
+      "valid_from": "2026-04-29",
+      "valid_through": "2026-05-21",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/hts_2026_revision_7_json.json",
+      "verification_method": "official USITC JSON download"
+    },
+    {
+      "revision_id": "2026 HTS Revision 11",
+      "published_on": "2026-07-01",
+      "valid_from": "2026-07-01",
+      "valid_through": "2026-07-20",
+      "source_url": "https://www.usitc.gov/sites/default/files/tata/hts/hts_2026_revision_11_json.json",
+      "verification_method": "official USITC JSON download"
+    }
+  ],
+  "provisions": [
+    {
+      "evidence_id": "HTS-1999-9617.00.10",
+      "code": "9617.00.10",
+      "description": "Vacuum flasks and other vacuum vessels, complete with cases; vessels having a capacity not exceeding 1 liter",
+      "general_rate": null,
+      "available_from": "1999-02-01",
+      "available_through": "1999-12-31",
+      "search_terms": "vacuum flask vessel double wall insulation drinkware tumbler"
+    },
+    {
+      "evidence_id": "HTS-9617.00.1000",
+      "code": "9617.00.1000",
+      "description": "Vacuum flasks and other vacuum vessels, complete; vessels having a capacity not exceeding 1 liter",
+      "general_rate": "7.2%",
+      "available_from": "2011-01-01",
+      "available_through": null,
+      "search_terms": "vacuum flask vessel double wall insulation drinkware tumbler bottle"
+    },
+    {
+      "evidence_id": "HTS-7323.93.0080",
+      "code": "7323.93.0080",
+      "description": "Other table, kitchen or household articles of stainless steel",
+      "general_rate": "2%",
+      "available_from": "1999-01-01",
+      "available_through": null,
+      "search_terms": "stainless steel household drinkware tumbler travel mug growler non-vacuum"
+    },
+    {
+      "evidence_id": "HTS-3924.90.5650",
+      "code": "3924.90.5650",
+      "description": "Other household articles of plastics, other",
+      "general_rate": "3.4%",
+      "available_from": "2011-01-01",
+      "available_through": null,
+      "search_terms": "plastic household planter pot saucer utilitarian resin"
+    },
+    {
+      "evidence_id": "HTS-3926.40.0090",
+      "code": "3926.40.0090",
+      "description": "Other statuettes and ornamental articles of plastics",
+      "general_rate": "5.3%",
+      "available_from": "2011-01-01",
+      "available_through": null,
+      "search_terms": "plastic ornamental decorative statuette decoration badge"
+    },
+    {
+      "evidence_id": "HTS-6911.10.2500",
+      "code": "6911.10.2500",
+      "description": "Porcelain or china tableware and kitchenware; other; of bone chinaware; other",
+      "general_rate": "6%",
+      "available_from": "2011-01-01",
+      "available_through": null,
+      "search_terms": "bone china porcelain cup tumbler tableware kitchenware"
+    },
+    {
+      "evidence_id": "HTS-6911.10.8010",
+      "code": "6911.10.8010",
+      "description": "Other porcelain or china tableware and kitchenware suitable for food or drink contact",
+      "general_rate": "20.8%",
+      "available_from": "2011-01-01",
+      "available_through": null,
+      "search_terms": "porcelain china cup mug drink contact tableware kitchenware"
+    },
+    {
+      "evidence_id": "HTS-6912.00.4400",
+      "code": "6912.00.4400",
+      "description": "Ceramic tableware and kitchenware other than porcelain or china; mugs and other steins",
+      "general_rate": "10%",
+      "available_from": "2011-01-01",
+      "available_through": null,
+      "search_terms": "stoneware ceramic mug stein straight sided other than porcelain"
+    },
+    {
+      "evidence_id": "HTS-6912.00.4500",
+      "code": "6912.00.4500",
+      "description": "Ceramic tableware and kitchenware other than porcelain or china; specified value-based cups and other listed articles",
+      "general_rate": "4.5%",
+      "available_from": "2011-01-01",
+      "available_through": null,
+      "search_terms": "stoneware dolomite ceramic handled cup tapered value per dozen other than porcelain"
+    },
+    {
+      "evidence_id": "HTS-6912.00.4810",
+      "code": "6912.00.4810",
+      "description": "Other ceramic tableware and kitchenware other than porcelain or china, suitable for food or drink contact",
+      "general_rate": "9.8%",
+      "available_from": "2011-01-01",
+      "available_through": null,
+      "search_terms": "dolomite ceramic cup drink contact other than porcelain"
+    }
+  ]
+}

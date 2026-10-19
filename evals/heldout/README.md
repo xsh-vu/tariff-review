@@ -46,6 +46,30 @@ Recheck all records against the live official CBP API with:
 python -m evals.heldout.validate --verify-live
 ```
 
+Run the date-coverage preflight without making API calls:
+
+```bash
+.venv/bin/python -m evals.heldout.run --preflight-only
+```
+
+Run the live Responses API + remote MCP benchmark:
+
+```bash
+.venv/bin/python -m evals.heldout.run \
+  --output evals/heldout/results/<dated-result>.json
+```
+
+The runner writes each complete API response to
+`runs/heldout/<run-id>/raw/` before it creates the manifest or opens
+`answer_key.json`. Those bulky raw traces remain local and are ignored by Git.
+The aggregate result JSON is kept in `evals/heldout/results/` as reviewable
+technical evidence. Classification accuracy, citation validity, evidence
+coverage, MCP reliability, latency, token usage, and estimated cost are reported
+separately.
+
+See [`results/README.md`](results/README.md) for the measured October 19, 2026
+baseline, the MCP schema defect it exposed, and the clean post-fix run.
+
 ## Case inventory
 
 | Case | Family | CROSS ruling | Date | Historical base HTSUS answer |

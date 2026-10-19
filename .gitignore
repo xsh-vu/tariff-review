@@ -8,6 +8,7 @@ __pycache__/
 .ruff_cache/
 .streamlit/secrets.toml
 runs/*.json
+runs/heldout/
 drafts/*.json
 !runs/.gitkeep
 !drafts/.gitkeep

@@ -106,11 +106,12 @@ Run the focused live evaluation next:
 ```
 
 This records `evals/live_results.json` as repository-level technical evidence.
-The reviewer-facing Streamlit UI intentionally does not display prior evaluation
-runs; its separate **OpenAI execution details** tab shows only metrics from the
-current tariff review under **Measured OpenAI execution**. The live evaluation
-covers the four demo outcomes plus the product-description edit. It is still a
-synthetic workflow evaluation, not an independent held-out legal benchmark.
+The reviewer-facing **OpenAI execution details** tab keeps the current tariff
+review's metrics under **Measured OpenAI execution** and separately publishes a
+pinned summary of the clean 20-case historical benchmark under **Tested against
+past customs rulings**. Older workflow-evaluation runs are not shown. The live
+workflow evaluation covers the four demo outcomes plus the product-description
+edit; it remains synthetic and is not the held-out legal benchmark.
 
 The 2026-10-18 validation passed 6/6 focused checks with 8,455 tokens, 71.462
 seconds of aggregate API latency, and a $0.035618 published-rate cost estimate.
@@ -122,6 +123,9 @@ approval rehearsal, and the failures observed during integration.
 ```bash
 .venv/bin/python -m evals.run
 .venv/bin/python -m evals.heldout.validate
+.venv/bin/python -m evals.heldout.run --preflight-only
+.venv/bin/python -m evals.heldout.run \
+  --output evals/heldout/results/<dated-result>.json
 ```
 
 This writes `evals/results.json` as technical evidence kept in the repository.
@@ -130,12 +134,20 @@ reachable MCP path are configured, these results measure only deterministic
 fixture behavior. They do not claim model correctness, API latency, token use,
 or cost.
 
-The second command validates the 20-case historical CBP CROSS held-out set,
-including answer isolation and zero overlap with the searchable ruling cache.
+The held-out commands validate and then run the 20-case historical CBP CROSS
+set, including answer isolation, dated HTS evidence, remote MCP evidence calls,
+strict structured output, and grading only after raw responses are persisted.
 See [`evals/heldout/README.md`](evals/heldout/README.md) for methodology,
-official sources, limitations, and the optional live CBP status check. The set
-has not yet been run against a model, and licensed-broker review remains
-pending.
+official sources, limitations, and the optional live CBP status check.
+
+The clean October 19, 2026 `gpt-6.1-sol` run produced 17/20 exact matches,
+20/20 mechanically valid citations, and 40/40 successful MCP calls. It used
+57,563 tokens, had 9.256-second p50 and 16.059-second p95 latency, and an
+estimated published-rate cost of `$0.165598`. These are selected-case prototype
+results, not broad customs-classification accuracy; licensed-broker review and
+repeated candidate-model runs remain pending. See
+[`evals/heldout/results/README.md`](evals/heldout/results/README.md) for the
+initial failure-bearing baseline and post-fix evidence.
 
 ## Demo path
 

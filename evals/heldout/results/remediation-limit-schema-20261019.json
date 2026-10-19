@@ -1,0 +1,174 @@
+{
+  "evaluation_mode": "historical_cbp_cross_responses_api_remote_mcp",
+  "dataset_id": "cbp-cross-heldout-v1",
+  "dataset_version": 1,
+  "run_id": "HIST-20261019T230414Z-58F9614C",
+  "model": "gpt-6.1-sol",
+  "started_at": "2026-10-19T23:04:14Z",
+  "responses_persisted_at": "2026-10-19T23:05:00Z",
+  "graded_at": "2026-10-19T23:10:09Z",
+  "answer_key_loaded_after_responses_persisted": true,
+  "summary": {
+    "total_cases": 4,
+    "evidence_eligible_cases": 4,
+    "evidence_gap_cases": 0,
+    "evaluated_responses": 4,
+    "exact_matches": 4,
+    "exact_match_rate_all_eligible_percent": 100.0,
+    "exact_match_rate_completed_percent": 100.0,
+    "six_digit_matches": 4,
+    "six_digit_match_rate_all_eligible_percent": 100.0,
+    "valid_citations": 4,
+    "unsupported_confident_errors": 0,
+    "target_ruling_leaks": 0
+  },
+  "mcp_reliability": {
+    "expected_calls": 8,
+    "attempted_calls": 8,
+    "successful_calls": 8,
+    "success_rate_expected_percent": 100.0
+  },
+  "execution": {
+    "api_responses": 4,
+    "total_tokens": 11965,
+    "estimated_api_cost_usd": "0.035330",
+    "costs_unavailable_for_responses": 0,
+    "cost_basis": {
+      "status": "calculated",
+      "pricing_observed_at": "2026-10-18",
+      "pricing_source_url": "https://developers.openai.com/api/docs/pricing",
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "context_band": "short_context_up_to_272k_input_tokens",
+      "rates": {
+        "input": "2.00",
+        "cached_input": "0.10",
+        "cache_write": "2.50",
+        "output": "10.00"
+      },
+      "note": "Estimated from API-reported token categories at dated published rates; billing records remain authoritative."
+    },
+    "mean_latency_seconds": 11.364,
+    "p50_latency_seconds": 10.28,
+    "p95_latency_seconds": 13.328
+  },
+  "cases": [
+    {
+      "case_id": "PR-CE-001",
+      "family": "ceramic_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "6911.10.8010",
+      "expected_six_digit_code": "6911.10",
+      "actual_code": "6911.10.8010",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "L85060"
+      ],
+      "hts_evidence_ids": [
+        "HTS-6911.10.8010"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N347310",
+      "failure": null
+    },
+    {
+      "case_id": "PR-CE-002",
+      "family": "ceramic_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "6911.10.2500",
+      "expected_six_digit_code": "6911.10",
+      "actual_code": "6911.10.2500",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N241154"
+      ],
+      "hts_evidence_ids": [
+        "HTS-6911.10.2500"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N276348",
+      "failure": null
+    },
+    {
+      "case_id": "PR-CE-005",
+      "family": "ceramic_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "6912.00.4810",
+      "expected_six_digit_code": "6912.00",
+      "actual_code": "6912.00.4810",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N295888"
+      ],
+      "hts_evidence_ids": [
+        "HTS-6912.00.4400",
+        "HTS-6912.00.4500",
+        "HTS-6912.00.4810"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N323611",
+      "failure": null
+    },
+    {
+      "case_id": "PR-CE-006",
+      "family": "ceramic_drinkware",
+      "status": "validated",
+      "evaluated": true,
+      "expected_code": "6912.00.4500",
+      "expected_six_digit_code": "6912.00",
+      "actual_code": "6912.00.4500",
+      "exact_match": true,
+      "six_digit_match": true,
+      "abstained": false,
+      "unsupported_confident_error": false,
+      "citation_valid": true,
+      "mcp_reliable": true,
+      "mcp_calls_attempted": 2,
+      "mcp_calls_successful": 2,
+      "revision_published_on_or_before_case": true,
+      "target_ruling_leaked": false,
+      "rulings_cited": [
+        "N295888"
+      ],
+      "hts_evidence_ids": [
+        "HTS-6912.00.4500",
+        "HTS-6912.00.4400"
+      ],
+      "official_answer_url": "https://rulings.cbp.gov/ruling/N360981",
+      "failure": null
+    }
+  ],
+  "limitations": [
+    "The 20 cases are selected from three demo product families and are not a random sample of customs classifications.",
+    "The target rulings are excluded from MCP search, but public rulings may have appeared in base-model training data.",
+    "Source verification is not licensed-broker review; broker review remains pending.",
+    "Classification accuracy, MCP reliability, and evidence coverage are reported separately."
+  ]
+}
