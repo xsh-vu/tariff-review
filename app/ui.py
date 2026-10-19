@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from decimal import Decimal
 from inspect import signature
@@ -30,200 +29,10 @@ def money(value: str | Decimal) -> str:
     return f"${Decimal(value):,.2f}"
 
 
-def load_json(path: Any) -> dict[str, Any] | None:
-    if not path.exists():
-        return None
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-
-
-def display_timestamp(value: Any) -> str:
+def display_run_time(value: Any) -> str:
     if not isinstance(value, str) or not value:
         return "Not recorded"
     return value.replace("T", " ").replace("Z", " UTC")
-
-
-def evaluation_case_rows(result: dict[str, Any]) -> list[dict[str, str]]:
-    measured_at = display_timestamp(result.get("measured_at"))
-    labels = {
-        "live_description_edit_changes_review": (
-            "Live description edit changes the review"
-        ),
-        "prompt_injection_text_does_not_force_classification": (
-            "Prompt-injection text does not force a classification"
-        ),
-        "remote_mcp_and_structured_output": (
-            "Remote MCP and strict Structured Outputs complete end to end"
-        ),
-    }
-    rows = []
-    for case in result.get("cases", []):
-        raw_name = str(case.get("name", "Unnamed check"))
-        if raw_name.startswith("live_classification:"):
-            label = f"Live classification — {raw_name.split(':', 1)[1]}"
-        elif raw_name.startswith("classification:"):
-            label = f"Deterministic classification — {raw_name.split(':', 1)[1]}"
-        else:
-            label = labels.get(raw_name, raw_name.replace("_", " ").title())
-
-        detail_parts = []
-        if "expected_outcome" in case:
-            detail_parts.append(
-                "Outcome: "
-                f"expected {case.get('expected_outcome')}; "
-                f"observed {case.get('actual_outcome')}"
-            )
-        if "expected_code" in case:
-            detail_parts.append(
-                "HTS: "
-                f"expected {case.get('expected_code') or 'no proposal'}; "
-                f"observed {case.get('actual_code') or 'no proposal'}"
-            )
-        elif "actual_outcome" in case:
-            detail_parts.append(
-                f"Observed {case.get('actual_outcome')} at "
-                f"{case.get('actual_code') or 'no proposed code'}"
-            )
-        if case.get("transport"):
-            calls = sorted(set(case.get("successful_calls", [])))
-            detail_parts.append(
-                f"Transport: {case['transport']}; tools: {', '.join(calls)}"
-            )
-        if not detail_parts:
-            detail_parts.append("Recorded behavior matched the expected safeguard.")
-        rows.append(
-            {
-                "Result": "Passed" if case.get("passed") else "Failed",
-                "Check": label,
-                "Recorded evidence": " · ".join(detail_parts),
-                "Run (UTC)": measured_at,
-            }
-        )
-    return rows
-
-
-def render_evaluation_tab(
-    fixture_eval: dict[str, Any] | None,
-    live_eval: dict[str, Any] | None,
-    live_preflight: dict[str, Any] | None,
-) -> None:
-    st.header("Evaluation evidence")
-    st.caption(
-        "Recorded results are displayed as measured. The deterministic suite checks "
-        "application behavior; the live suite measures the Responses API and remote "
-        "MCP workflow."
-    )
-
-    st.subheader("Application regression suite")
-    if fixture_eval:
-        summary = fixture_eval.get("summary", {})
-        passed_col, run_col, duration_col = st.columns(3)
-        passed_col.metric(
-            "Checks passed",
-            f"{summary.get('passed', '—')}/{summary.get('total', '—')}",
-        )
-        run_col.metric("Last run", display_timestamp(fixture_eval.get("measured_at")))
-        duration_col.metric(
-            "Suite duration", f"{fixture_eval.get('elapsed_seconds', '—')} s"
-        )
-        st.info(
-            "These are deterministic workflow and safety regressions. They do not "
-            "measure model accuracy or OpenAI API performance."
-        )
-        fixture_rows = evaluation_case_rows(fixture_eval)
-        st.dataframe(
-            fixture_rows,
-            hide_index=True,
-            height=35 * (len(fixture_rows) + 1) + 3,
-        )
-        with st.expander("Regression-suite limitations and recorded totals"):
-            st.json(
-                {
-                    "evaluation_mode": fixture_eval.get("evaluation_mode"),
-                    "financial_checks": fixture_eval.get("financial_checks"),
-                    "limitations": fixture_eval.get("limitations", []),
-                }
-            )
-    else:
-        st.info("No application regression result is recorded yet.")
-
-    st.divider()
-    st.subheader("Live OpenAI integration checks")
-    if live_eval:
-        summary = live_eval.get("summary", {})
-        aggregate = live_eval.get("aggregate", {})
-        passed_col, run_col, calls_col = st.columns(3)
-        passed_col.metric(
-            "Checks passed",
-            f"{summary.get('passed', '—')}/{summary.get('total', '—')}",
-            live_eval.get("status", "unknown"),
-        )
-        run_col.metric("Last run", display_timestamp(live_eval.get("measured_at")))
-        calls_col.metric("Responses API calls", aggregate.get("api_calls", "—"))
-        usage_col, latency_col, cost_col = st.columns(3)
-        usage_col.metric("Total tokens", aggregate.get("total_tokens", "—"))
-        latency_col.metric(
-            "Measured latency", f"{aggregate.get('latency_seconds', '—')} s"
-        )
-        cost_col.metric(
-            "Estimated API cost",
-            f"${aggregate.get('estimated_api_cost_usd', '—')}",
-        )
-        live_rows = evaluation_case_rows(live_eval)
-        st.dataframe(
-            live_rows,
-            hide_index=True,
-            height=35 * (len(live_rows) + 1) + 3,
-        )
-
-        executions = []
-        for execution in live_eval.get("executions", []):
-            executions.append(
-                {
-                    "Run (UTC)": display_timestamp(execution.get("measured_at")),
-                    "Response ID": execution.get("response_id", "—"),
-                    "Model": execution.get("model", "—"),
-                    "Tokens": execution.get("api_usage", {}).get("total_tokens", "—"),
-                    "Latency (s)": execution.get("latency_seconds", "—"),
-                    "Estimated cost": (
-                        f"${execution.get('api_cost_usd')}"
-                        if execution.get("api_cost_usd") is not None
-                        else "—"
-                    ),
-                }
-            )
-        if executions:
-            with st.expander("Individual live API executions"):
-                st.dataframe(executions, hide_index=True)
-        if live_eval.get("failure"):
-            st.error(
-                "Latest live evaluation failed safely: "
-                f"{live_eval['failure'].get('message')}"
-            )
-        with st.expander("Live-evaluation limitations and recorded totals"):
-            st.json(
-                {
-                    "evaluation_mode": live_eval.get("evaluation_mode"),
-                    "financial_checks": live_eval.get("financial_checks"),
-                    "limitations": live_eval.get("limitations", []),
-                }
-            )
-    elif live_preflight and live_preflight.get("status") == "failed":
-        failure = live_preflight.get("failure", {})
-        st.error(
-            "Latest live preflight failed safely: "
-            f"{failure.get('type', 'unknown error')} · "
-            f"run {display_timestamp(live_preflight.get('measured_at'))} · "
-            f"{live_preflight.get('elapsed_seconds', '—')} s"
-        )
-        st.caption(failure.get("message", "No failure detail recorded."))
-    else:
-        st.info(
-            "No live OpenAI evaluation has been recorded. Run `python -m evals.live` "
-            "after configuring the API and remote MCP path."
-        )
 
 
 def prepare_local_pending(finding: dict[str, Any]) -> dict[str, Any]:
@@ -383,6 +192,21 @@ def run_review(
 
 
 st.set_page_config(page_title="Harbor & Crane Tariff Audit", layout="wide")
+st.html(
+    """
+    <style>
+    .st-key-openai_execution {
+        background: linear-gradient(
+            135deg,
+            rgba(14, 116, 144, 0.10),
+            rgba(15, 118, 110, 0.05)
+        );
+        border-color: rgba(14, 116, 144, 0.32) !important;
+        box-shadow: 0 8px 24px rgba(14, 116, 144, 0.08);
+    }
+    </style>
+    """
+)
 st.title("Harbor & Crane · Premium Tariff Audit")
 st.caption(
     "Northfield Home Goods · evidence-backed screening · Column 1 General base duty only"
@@ -417,9 +241,119 @@ else:
 
 review_available = is_live or mode == FIXTURE_MODE
 
-fixture_eval = load_json(PROJECT_ROOT / "evals" / "results.json")
-live_eval = load_json(PROJECT_ROOT / "evals" / "live_results.json")
-live_preflight = load_json(PROJECT_ROOT / "runs" / "live_preflight.json")
+
+def render_review_results(review: dict[str, Any]) -> None:
+    proposal = review["proposal"]
+    with st.container(border=True):
+        st.header("Tariff review results")
+        over, under, status = st.columns(3)
+        over.metric(
+            "Potential overpayment", money(review["potential_overpayment_total"])
+        )
+        under.metric(
+            "Underpayment exposure", money(review["potential_underpayment_total"])
+        )
+        status.metric("Review status", proposal["status"].title())
+        st.caption(
+            "Potential differences are not guaranteed refunds. Chapter 99 duties, "
+            "trade remedies, preferences, origin, deadlines, and recovery eligibility "
+            "are excluded."
+        )
+
+        ordered_outcomes = [
+            "potential_overpayment",
+            "potential_underpayment",
+            "needs_info",
+            "confirmed",
+        ]
+        findings = sorted(
+            proposal["findings"],
+            key=lambda item: ordered_outcomes.index(item["outcome"]),
+        )
+        for index, finding in enumerate(findings):
+            render_finding(finding, review["calculations"])
+            if finding["outcome"] == "potential_overpayment":
+                if st.button(
+                    f"Prepare correction draft for {finding['sku_id']}",
+                    key=f"prepare-{finding['sku_id']}",
+                ):
+                    try:
+                        if st.session_state.review_mode == LIVE_MODE:
+                            pending = live_client().request_draft(finding)
+                            st.session_state.pending_draft = {
+                                "mode": "live",
+                                **pending.to_dict(),
+                            }
+                        else:
+                            st.session_state.pending_draft = prepare_local_pending(finding)
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Draft request stopped safely: {exc}")
+            if index < len(findings) - 1:
+                st.divider()
+
+
+def render_execution_metrics(review: dict[str, Any]) -> None:
+    execution = review["execution"]
+    with st.container(border=True, key="openai_execution"):
+        st.subheader("Measured OpenAI execution")
+        if execution["mode"] == "live_responses_api_remote_mcp":
+            st.caption(
+                "Last run completed: "
+                f"**{display_run_time(execution.get('measured_at'))}**"
+            )
+            response_col, model_col = st.columns([3, 1])
+            response_col.caption("Response ID")
+            response_col.code(
+                execution["response_id"] or "—",
+                language=None,
+                wrap_lines=True,
+            )
+            model_col.caption("Model")
+            model_col.code(
+                execution["model"] or "—",
+                language=None,
+                wrap_lines=True,
+            )
+            tokens_col, latency_col, cost_col = st.columns(3)
+            tokens_col.metric(
+                "Tokens", execution["api_usage"].get("total_tokens") or "—"
+            )
+            latency_col.metric("Latency", f"{execution['latency_seconds']} s")
+            cost_col.metric(
+                "Estimated API cost",
+                (
+                    f"${execution['api_cost_usd']}"
+                    if execution["api_cost_usd"] is not None
+                    else "—"
+                ),
+            )
+            remote = review.get("remote_mcp", {})
+            st.success(
+                f"Remote MCP transport: {remote.get('transport', 'unknown')} · "
+                f"successful calls: "
+                f"{', '.join(remote.get('successful_calls', [])) or 'none'} · "
+                "strict structured output validated"
+            )
+            basis = execution.get("cost_basis", {})
+            if basis.get("pricing_source_url"):
+                st.markdown(
+                    f"Cost basis: published rates observed "
+                    f"{basis.get('pricing_observed_at')} · "
+                    f"[OpenAI pricing source]({basis['pricing_source_url']}). "
+                    "Billing records remain authoritative."
+                )
+        else:
+            st.warning(
+                "Emergency fixture mode does not produce OpenAI API measurements."
+            )
+        with st.expander("Full execution metadata"):
+            st.json(execution)
+            if execution["mode"] != "live_responses_api_remote_mcp":
+                st.warning(
+                    "Fixture timing and correctness are not OpenAI API measurements."
+                )
+
 
 def render_review_tab() -> None:
     products = repository.get_catalog("northfield-home-goods")
@@ -527,83 +461,9 @@ def render_review_tab() -> None:
 
     review = st.session_state.get("review")
     if review:
-        proposal = review["proposal"]
         st.divider()
-        st.header("Audit results")
-        over, under, status = st.columns(3)
-        over.metric("Potential overpayment", money(review["potential_overpayment_total"]))
-        under.metric("Underpayment exposure", money(review["potential_underpayment_total"]))
-        status.metric("Review status", proposal["status"].title())
-        st.caption(
-            "Potential differences are not guaranteed refunds. Chapter 99 duties, trade remedies, "
-            "preferences, origin, deadlines, and recovery eligibility are excluded."
-        )
-
-        ordered_outcomes = [
-            "potential_overpayment",
-            "potential_underpayment",
-            "needs_info",
-            "confirmed",
-        ]
-        findings = sorted(
-            proposal["findings"], key=lambda item: ordered_outcomes.index(item["outcome"])
-        )
-        for finding in findings:
-            render_finding(finding, review["calculations"])
-            if finding["outcome"] == "potential_overpayment":
-                if st.button(
-                    f"Prepare correction draft for {finding['sku_id']}",
-                    key=f"prepare-{finding['sku_id']}",
-                ):
-                    try:
-                        if st.session_state.review_mode == LIVE_MODE:
-                            pending = live_client().request_draft(finding)
-                            st.session_state.pending_draft = {
-                                "mode": "live",
-                                **pending.to_dict(),
-                            }
-                        else:
-                            st.session_state.pending_draft = prepare_local_pending(finding)
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(f"Draft request stopped safely: {exc}")
-            st.divider()
-
-        execution = review["execution"]
-        if execution["mode"] == "live_responses_api_remote_mcp":
-            st.subheader("Measured OpenAI execution")
-            response_col, model_col, tokens_col, latency_col, cost_col = st.columns(5)
-            response_col.metric("Response ID", execution["response_id"] or "—")
-            model_col.metric("Model", execution["model"] or "—")
-            tokens_col.metric(
-                "Tokens", execution["api_usage"].get("total_tokens") or "—"
-            )
-            latency_col.metric("Latency", f"{execution['latency_seconds']} s")
-            cost_col.metric(
-                "Estimated API cost",
-                (
-                    f"${execution['api_cost_usd']}"
-                    if execution["api_cost_usd"] is not None
-                    else "—"
-                ),
-            )
-            remote = review.get("remote_mcp", {})
-            st.success(
-                f"Remote MCP transport: {remote.get('transport', 'unknown')} · "
-                f"successful calls: {', '.join(remote.get('successful_calls', [])) or 'none'} · "
-                "strict structured output validated"
-            )
-            basis = execution.get("cost_basis", {})
-            if basis.get("pricing_source_url"):
-                st.markdown(
-                    f"Cost basis: published rates observed {basis.get('pricing_observed_at')} · "
-                    f"[OpenAI pricing source]({basis['pricing_source_url']}). "
-                    "Billing records remain authoritative."
-                )
-        with st.expander("Full execution metadata"):
-            st.json(execution)
-            if execution["mode"] != "live_responses_api_remote_mcp":
-                st.warning("Fixture timing and correctness are not OpenAI API measurements.")
+        render_review_results(review)
+        render_execution_metrics(review)
 
     pending = st.session_state.get("pending_draft")
     if pending:
@@ -662,8 +522,4 @@ def render_review_tab() -> None:
                 st.caption("The draft continuation's live API metadata is included above.")
 
 
-review_tab, evaluation_tab = st.tabs(["Tariff review", "Evaluation evidence"])
-with review_tab:
-    render_review_tab()
-with evaluation_tab:
-    render_evaluation_tab(fixture_eval, live_eval, live_preflight)
+render_review_tab()

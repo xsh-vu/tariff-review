@@ -94,7 +94,7 @@ one-SKU preflight:
 The preflight writes a redacted `runs/live_preflight.json` only after attempting
 the real Responses API path. It verifies MCP tool discovery and calls, strict
 Structured Outputs, the expected classification, response metadata, and a dated
-cost estimate. A failed preflight is also recorded and displayed in the UI. On
+cost estimate. A failed preflight is also recorded for technical review. On
 2026-10-18, the first authenticated attempt reached the API but failed safely
 with `credit_balance_exhausted`; no response or usage metrics are claimed for that
 attempt.
@@ -105,10 +105,12 @@ Run the focused live evaluation next:
 .venv/bin/python -m evals.live
 ```
 
-This records `evals/live_results.json`, which the Streamlit UI displays alongside
-the clearly separated application regression results. The live evaluation covers
-the four demo outcomes plus the product-description edit. It is still a synthetic
-workflow evaluation, not an independent held-out legal benchmark.
+This records `evals/live_results.json` as repository-level technical evidence.
+The reviewer-facing Streamlit UI intentionally does not display prior evaluation
+runs; it shows only metrics from the current tariff review under **Measured OpenAI
+execution**. The live evaluation covers the four demo outcomes plus the
+product-description edit. It is still a synthetic workflow evaluation, not an
+independent held-out legal benchmark.
 
 The 2026-10-18 validation passed 6/6 focused checks with 8,455 tokens, 71.462
 seconds of aggregate API latency, and a $0.035618 published-rate cost estimate.
@@ -122,7 +124,11 @@ approval rehearsal, and the failures observed during integration.
 .venv/bin/python -m evals.heldout.validate
 ```
 
-This writes `evals/results.json`. Until live credentials and a reachable MCP path are configured, these results measure only deterministic fixture behavior. They do not claim model correctness, API latency, token use, or cost.
+This writes `evals/results.json` as technical evidence kept in the repository.
+It is not shown in the reviewer-facing demo UI. Until live credentials and a
+reachable MCP path are configured, these results measure only deterministic
+fixture behavior. They do not claim model correctness, API latency, token use,
+or cost.
 
 The second command validates the 20-case historical CBP CROSS held-out set,
 including answer isolation and zero overlap with the searchable ruling cache.
