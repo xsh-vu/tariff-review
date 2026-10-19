@@ -34,13 +34,14 @@ def run_preflight(output: Path = OUTPUT) -> dict[str, Any]:
         checks = {
             "authenticated_remote_mcp_discovered": bool(discovery)
             and not any(item.get("error") for item in discovery),
-            "required_mcp_tools_available": {
+            "review_mcp_tool_scope_exact": discovered_tools
+            == {
                 "get_catalog",
                 "get_entries",
                 "search_hts",
+                "search_rulings",
                 "get_ruling",
-                "compute_duty_delta",
-            }.issubset(discovered_tools),
+            },
             "required_mcp_tools_called": {
                 "get_catalog",
                 "get_entries",

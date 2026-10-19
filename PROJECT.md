@@ -1,7 +1,7 @@
 # PROJECT.md — Tariff Classification Review
 
 **Status:** Authenticated Responses API + private MCP tunnel vertical slice validated end to end — v0.6  
-**Project type:** OpenAI Applied AI technical take-home  
+**Project type:** 5-hour scoped demo
 **Selected product surface:** OpenAI Platform and APIs  
 **Primary technology:** OpenAI Responses API + MCP  
 **Data:** Synthetic customer records and public customs sources
@@ -110,7 +110,7 @@ Clearly distinguish **measured results**, **synthetic scenario values**, and **c
 
 If 30 of Harbor & Crane's 150 importer clients purchase one $5,000 audit annually, the offering would generate **$150,000 in annual gross audit revenue**. This assumes 20% adoption and does **not** represent profit, validated pricing, or a revenue forecast. Broker labor, implementation, legal review, hosting, and customer acquisition costs must be included to estimate gross margin.
 
-Do not treat this scenario as the demo's primary headline. Lead with the importer's potential base-duty savings and use brokerage economics to explain why Harbor & Crane would offer the service.
+This scenario is NOT the demo's primary headline. Lead with the importer's potential base-duty savings and use brokerage economics to explain why Harbor & Crane would offer the service.
 
 ## 5. Target workflow
 

@@ -2,7 +2,7 @@
 
 ## Project context
 
-This repository contains a prototype tariff classification review application for an OpenAI technical take-home assignment.
+This repository contains a prototype tariff classification review application.
 
 **Business hook:** Identify potentially recoverable import duties caused by incorrect tariff classifications.
 

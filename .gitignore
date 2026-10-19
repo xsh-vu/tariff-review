@@ -1,8 +1,7 @@
 .env
 .venv/
 .tools/
-.deck-build/
-.chart-data-*/
+presentation/build/
 __pycache__/
 *.py[cod]
 .pytest_cache/

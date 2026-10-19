@@ -4,7 +4,7 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-from agent.schema import ClassificationProposal, Finding, MissingInformation
+from agent.schema import ClassificationProposal, Finding
 from data.duty import DutyCalculator
 from data.repository import Repository
 
@@ -103,7 +103,6 @@ class FixtureReviewer:
         products = self.repository.get_catalog("northfield-home-goods", sku_ids)
         overrides = description_overrides or {}
         findings: list[Finding] = []
-        missing: list[MissingInformation] = []
         calculations: dict[str, dict[str, Any]] = {}
 
         for product in products:
@@ -115,16 +114,9 @@ class FixtureReviewer:
             if proposed is None:
                 outcome = "needs_info"
                 route = "supplier"
-                action = "Request the missing product specification before classifying."
-                missing.append(
-                    MissingInformation(
-                        sku_id=product["sku_id"], required_fact=missing_fact or "Unknown"
-                    )
-                )
             elif proposed == declared:
                 outcome = "confirmed"
                 route = "broker"
-                action = "Retain the declared classification; no correction is indicated."
             else:
                 calculation = self.calculator.compute_duty_delta(
                     product["client_id"], product["sku_id"], declared, proposed
@@ -132,15 +124,9 @@ class FixtureReviewer:
                 calculations[product["sku_id"]] = calculation
                 outcome = calculation["direction"]
                 route = "counsel" if outcome == "potential_underpayment" else "broker"
-                action = (
-                    "Escalate potential underpayment for compliance review."
-                    if outcome == "potential_underpayment"
-                    else "Broker should validate recovery eligibility before preparing a draft."
-                )
             findings.append(
                 Finding(
                     sku_id=product["sku_id"],
-                    declared_code=declared,
                     proposed_code=proposed,
                     outcome=outcome,
                     deciding_rule=rationale,
@@ -150,12 +136,6 @@ class FixtureReviewer:
                         else []
                     ),
                     rulings_cited=evidence_ids,
-                    confidence_or_uncertainty=(
-                        "Incomplete: decisive product evidence is missing."
-                        if proposed is None
-                        else "Supported for this synthetic fact pattern; broker verification required."
-                    ),
-                    recommended_action=action,
                     route_to=route,
                     missing_fact=missing_fact,
                 )
@@ -164,16 +144,7 @@ class FixtureReviewer:
         proposal = ClassificationProposal(
             run_id=run_id,
             client_id="northfield-home-goods",
-            status="incomplete" if missing else "complete",
-            scope="Column 1 General base-duty screening; synthetic demo data",
-            source_revision=self.repository.source_revision,
             findings=findings,
-            missing_information=missing,
-            warnings=[
-                "Potential duty differences are not guaranteed refunds.",
-                "Chapter 99 duties, trade remedies, preference programs, and recovery eligibility are excluded.",
-                "This fixture preview is deterministic and is not an OpenAI API result.",
-            ],
         )
         overpayment = sum(
             Decimal(item["potential_base_duty_difference"])
@@ -185,8 +156,28 @@ class FixtureReviewer:
             for item in calculations.values()
             if Decimal(item["potential_base_duty_difference"]) < 0
         )
+        proposal_payload = proposal.model_dump(mode="json")
+        proposal_payload["status"] = (
+            "incomplete"
+            if any(finding.outcome == "needs_info" for finding in findings)
+            else "complete"
+        )
+        declared_codes = {
+            product["sku_id"]: product["declared_code"] for product in products
+        }
+        for finding in proposal_payload["findings"]:
+            finding["declared_code"] = declared_codes[finding["sku_id"]]
         return {
-            "proposal": proposal.model_dump(mode="json"),
+            "proposal": proposal_payload,
+            "review_scope": {
+                "source_revision": self.repository.source_revision,
+                "duty_scope": "Column 1 General base duty only",
+                "warnings": [
+                    "Potential duty differences are not guaranteed refunds.",
+                    "Chapter 99 duties, trade remedies, preference programs, and recovery eligibility are excluded.",
+                    "This fixture preview is deterministic and is not an OpenAI API result.",
+                ],
+            },
             "calculations": calculations,
             "potential_overpayment_total": f"{overpayment:.2f}",
             "potential_underpayment_total": f"{underpayment:.2f}",

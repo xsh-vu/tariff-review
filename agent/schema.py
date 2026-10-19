@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class StrictModel(BaseModel):
@@ -11,7 +11,6 @@ class StrictModel(BaseModel):
 
 class Finding(StrictModel):
     sku_id: str
-    declared_code: str
     proposed_code: str | None
     outcome: Literal[
         "potential_overpayment", "potential_underpayment", "needs_info", "confirmed"
@@ -19,8 +18,6 @@ class Finding(StrictModel):
     deciding_rule: str
     legal_notes_cited: list[str]
     rulings_cited: list[str]
-    confidence_or_uncertainty: str
-    recommended_action: str
     route_to: Literal["broker", "counsel", "supplier"]
     missing_fact: str | None
 
@@ -31,25 +28,21 @@ class Finding(StrictModel):
                 raise ValueError("needs_info requires a missing fact and no proposed code")
         elif self.proposed_code is None:
             raise ValueError("completed findings require a proposed code")
-        if self.outcome == "potential_underpayment" and self.route_to != "counsel":
-            raise ValueError("potential underpayments must route to counsel")
+        expected_route = {
+            "potential_overpayment": "broker",
+            "potential_underpayment": "counsel",
+            "needs_info": "supplier",
+            "confirmed": "broker",
+        }[self.outcome]
+        if self.route_to != expected_route:
+            raise ValueError(f"{self.outcome} findings must route to {expected_route}")
         return self
-
-
-class MissingInformation(StrictModel):
-    sku_id: str
-    required_fact: str
 
 
 class ClassificationProposal(StrictModel):
     run_id: str
     client_id: str
-    status: Literal["complete", "incomplete"]
-    scope: str
-    source_revision: str
     findings: list[Finding]
-    missing_information: list[MissingInformation]
-    warnings: list[str]
 
 
 def strict_response_format() -> dict:
@@ -72,8 +65,6 @@ def validate_evidence_and_codes(
             raise ValueError(
                 f"{finding.sku_id} cites unfetched rulings: {sorted(unknown_rulings)}"
             )
-        if finding.declared_code not in known_codes:
-            raise ValueError(f"Unknown declared code: {finding.declared_code}")
         if finding.proposed_code and finding.proposed_code not in known_codes:
             raise ValueError(f"Unknown proposed code: {finding.proposed_code}")
 

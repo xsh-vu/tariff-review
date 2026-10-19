@@ -5,7 +5,7 @@ import json
 import os
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from data.duty import DutyCalculator
 from data.repository import DataError, PROJECT_ROOT, Repository
@@ -19,12 +19,24 @@ approval_store = ApprovalStore(
 )
 
 
+class CatalogResult(TypedDict):
+    records: list[dict[str, Any]]
+
+
+class EntryResult(TypedDict):
+    entries: list[dict[str, Any]]
+
+
 def get_catalog(
     client_id: str,
-    sku_ids: list[str] | None = None,
+    sku_ids: list[str],
     description_overrides: dict[str, str] | None = None,
-) -> list[dict[str, Any]]:
+) -> CatalogResult:
     """Return synthetic product records, applying explicit review-only descriptions."""
+    if not sku_ids:
+        raise DataError("sku_ids must contain at least one SKU")
+    if len(sku_ids) != len(set(sku_ids)):
+        raise DataError("sku_ids must not contain duplicates")
     products = repository.get_catalog(client_id, sku_ids)
     overrides = description_overrides or {}
     returned_skus = {product["sku_id"] for product in products}
@@ -41,12 +53,19 @@ def get_catalog(
         product = next(item for item in products if item["sku_id"] == sku_id)
         product["description"] = description.strip()
         product["description_source"] = "review_override"
-    return products
+    return {"records": products}
 
 
-def get_entries(client_id: str, sku_id: str) -> list[dict[str, Any]]:
-    """Return the synthetic entry records for one known SKU."""
-    return repository.get_entries(client_id, sku_id)
+def get_entries(client_id: str, sku_ids: list[str]) -> EntryResult:
+    """Return synthetic entry records for the selected SKUs in one batch."""
+    if not sku_ids:
+        raise DataError("sku_ids must contain at least one SKU")
+    if len(sku_ids) != len(set(sku_ids)):
+        raise DataError("sku_ids must not contain duplicates")
+    entries = []
+    for sku_id in sku_ids:
+        entries.extend(repository.get_entries(client_id, sku_id))
+    return {"entries": entries}
 
 
 def search_hts(query: str, limit: int = 8) -> list[dict[str, Any]]:

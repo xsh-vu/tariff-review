@@ -15,7 +15,20 @@ python3 -m venv .venv
 .venv/bin/streamlit run app/ui.py
 ```
 
-The UI opens in deterministic fixture-preview mode and works without credentials. That mode is a demo fallback and is explicitly labeled as not using OpenAI.
+The panel-facing UI defaults to the live Responses API + MCP workflow. If live
+configuration is unavailable, the review action is disabled rather than silently
+falling back to local logic.
+
+The deterministic fixture implementation remains available for development,
+regression testing, and an explicitly disclosed presentation emergency. It is
+hidden by default. To expose the presenter-only fallback, start Streamlit with:
+
+```bash
+ENABLE_FIXTURE_PREVIEW=true .venv/bin/streamlit run app/ui.py
+```
+
+The fallback is visibly labeled as local deterministic behavior and must not be
+presented as an OpenAI API result.
 
 ## Live Responses API + MCP mode
 
@@ -67,7 +80,7 @@ Then run the UI:
 .venv/bin/streamlit run app/ui.py
 ```
 
-Live review calls use `allowed_tools`, strict `text.format` JSON Schema output, and deterministic post-validation. The draft workflow pauses on one `mcp_approval_request`; the UI displays the exact arguments and continues with an `mcp_approval_response`. The MCP server also requires a matching, single-use local approval token before it writes a draft.
+Live review calls use a five-tool evidence-only `allowed_tools` policy, one batched catalog lookup, one batched entry lookup, compact strict `text.format` JSON Schema output, and deterministic post-validation and duty calculation in application code. A validated `mcp_list_tools` item may be reused for five minutes within the same UI session and exact review policy; prior product data and review results are not carried forward. The draft workflow uses a separate one-tool policy, pauses on one `mcp_approval_request`, displays the exact arguments, and continues with an `mcp_approval_response`. The MCP server also requires a matching, single-use local approval token before it writes a draft.
 
 ### Live gate
 
@@ -93,7 +106,7 @@ Run the focused live evaluation next:
 ```
 
 This records `evals/live_results.json`, which the Streamlit UI displays alongside
-the clearly separated deterministic fixture results. The live evaluation covers
+the clearly separated application regression results. The live evaluation covers
 the four demo outcomes plus the product-description edit. It is still a synthetic
 workflow evaluation, not an independent held-out legal benchmark.
 
@@ -133,5 +146,7 @@ pending.
 - [PHASE1_EVIDENCE.md](PHASE1_EVIDENCE.md) — approved scenario evidence table
 - [TODO.md](TODO.md) — phased implementation checklist
 - [LIVE_VALIDATION.md](LIVE_VALIDATION.md) — dated live metrics, failures, and rehearsal record
+- [presentation/harbor-crane-tariff-audit-demo-v2.pptx](presentation/harbor-crane-tariff-audit-demo-v2.pptx) — presentation deck
+- [presentation/DEMO_RUNBOOK.md](presentation/DEMO_RUNBOOK.md) — timed five-minute demonstration script
 
 The legal cache is intentionally narrow. Entry dates are fixed to the verified 2026 HTS revision observation date; unsupported historical dates fail instead of silently applying a current rate.

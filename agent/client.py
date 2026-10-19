@@ -8,7 +8,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from openai import OpenAI
 
@@ -22,15 +22,25 @@ from data.repository import PROJECT_ROOT, Repository
 from server.approval import ApprovalStore
 
 
-READ_TOOLS = [
+REVIEW_TOOLS = [
     "get_catalog",
     "get_entries",
     "search_hts",
     "search_rulings",
     "get_ruling",
-    "compute_duty_delta",
 ]
 DRAFT_TOOL = "draft_correction"
+MCP_SERVER_LABEL = "harbor_crane_tariff_review"
+MCP_DISCOVERY_TTL_SECONDS = 300.0
+ProgressCallback = Callable[[str], None]
+
+TOOL_PROGRESS_LABELS = {
+    "get_catalog": "retrieved the selected product records",
+    "get_entries": "retrieved entry history",
+    "search_hts": "searched the verified HTS evidence cache",
+    "search_rulings": "searched the verified CBP ruling index",
+    "get_ruling": "retrieved a cited CBP ruling",
+}
 
 
 class LiveConfigurationError(RuntimeError):
@@ -176,13 +186,15 @@ class TariffReviewClient:
         self.instructions = (PROJECT_ROOT / "agent" / "instructions.md").read_text(
             encoding="utf-8"
         )
+        self._review_mcp_discovery: dict[str, Any] | None = None
+        self._review_mcp_discovery_expires_at = 0.0
 
     def _mcp_tool(
         self, allowed_tools: list[str], require_approval: str | dict[str, Any]
     ) -> dict[str, Any]:
         tool: dict[str, Any] = {
             "type": "mcp",
-            "server_label": "harbor_crane_tariff_review",
+            "server_label": MCP_SERVER_LABEL,
             "server_description": (
                 "Bounded synthetic catalog, verified tariff evidence, deterministic "
                 "base-duty calculator, and approval-gated local correction drafts."
@@ -265,6 +277,112 @@ class TariffReviewClient:
             return json.dumps(value, default=str)
         except TypeError:
             return str(value)
+
+    @staticmethod
+    def _json_tool_output(value: Any, tool_name: str) -> Any:
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except json.JSONDecodeError as exc:
+                raise ResponseValidationError(
+                    f"{tool_name} returned invalid JSON"
+                ) from exc
+        if hasattr(value, "model_dump"):
+            return value.model_dump(mode="json")
+        return value
+
+    @classmethod
+    def _record_list_tool_output(
+        cls,
+        value: Any,
+        tool_name: str,
+        wrapper_key: str,
+        depth: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Normalize documented JSON and standard MCP structured-content forms."""
+        if depth > 4:
+            raise ResponseValidationError(
+                f"{tool_name} returned an excessively nested payload"
+            )
+        decoded = cls._json_tool_output(value, tool_name)
+        if isinstance(decoded, dict):
+            for key in (wrapper_key, "result", "structuredContent", "structured_content"):
+                if key in decoded:
+                    return cls._record_list_tool_output(
+                        decoded[key], tool_name, wrapper_key, depth + 1
+                    )
+            if "content" in decoded:
+                return cls._record_list_tool_output(
+                    decoded["content"], tool_name, wrapper_key, depth + 1
+                )
+        elif isinstance(decoded, list):
+            records: list[dict[str, Any]] = []
+            for item in decoded:
+                if isinstance(item, dict) and item.get("type") == "text":
+                    item = item.get("text")
+                if isinstance(item, str):
+                    item = cls._json_tool_output(item, tool_name)
+                if isinstance(item, list):
+                    if not all(isinstance(record, dict) for record in item):
+                        break
+                    records.extend(item)
+                    continue
+                if not isinstance(item, dict):
+                    break
+                records.append(item)
+            else:
+                return records
+
+        if isinstance(decoded, dict):
+            shape = f"object keys={sorted(str(key) for key in decoded)}"
+        elif isinstance(decoded, list):
+            item_types = sorted({type(item).__name__ for item in decoded})
+            shape = f"array item_types={item_types}"
+        else:
+            shape = type(decoded).__name__
+        raise ResponseValidationError(
+            f"{tool_name} returned an invalid record list ({shape})"
+        )
+
+    def _catalog_declared_codes(
+        self, catalog_output: Any, sku_ids: list[str]
+    ) -> dict[str, str]:
+        records = self._record_list_tool_output(
+            catalog_output, "get_catalog", "records"
+        )
+        returned_skus = [record.get("sku_id") for record in records]
+        if returned_skus != sku_ids:
+            raise ResponseValidationError(
+                "get_catalog result did not match the selected SKU batch and order"
+            )
+        declared_codes: dict[str, str] = {}
+        for record in records:
+            sku_id = record["sku_id"]
+            if record.get("client_id") != "northfield-home-goods":
+                raise ResponseValidationError(
+                    f"get_catalog returned the wrong client for {sku_id}"
+                )
+            declared_code = record.get("declared_code")
+            if not isinstance(declared_code, str) or not declared_code.strip():
+                raise ResponseValidationError(
+                    f"get_catalog returned no declared code for {sku_id}"
+                )
+            declared_code = declared_code.strip()
+            if declared_code not in self.repository.hts_codes:
+                raise ResponseValidationError(
+                    f"get_catalog returned an unsupported declared code for {sku_id}: "
+                    f"{declared_code}"
+                )
+            expected = self.repository.get_product(
+                "northfield-home-goods", sku_id
+            )["declared_code"]
+            if declared_code != expected:
+                raise ResponseValidationError(
+                    f"get_catalog declared code did not match the application record "
+                    f"for {sku_id}"
+                )
+            declared_codes[sku_id] = declared_code
+        return declared_codes
 
     def _usage_record(self, response: Any, elapsed: float) -> dict[str, Any]:
         usage = getattr(response, "usage", None)
@@ -381,13 +499,96 @@ class TariffReviewClient:
             )
         return inventories
 
+    @classmethod
+    def _reusable_mcp_discovery(
+        cls, response: Any, expected_tools: list[str]
+    ) -> dict[str, Any] | None:
+        """Return a safe, schema-only discovery item for a matching tool policy."""
+        for item in getattr(response, "output", []):
+            if cls._item_type(item) != "mcp_list_tools":
+                continue
+            if cls._item_value(item, "error"):
+                continue
+            if cls._item_value(item, "server_label") != MCP_SERVER_LABEL:
+                continue
+            item_id = cls._item_value(item, "id")
+            tools = cls._item_value(item, "tools") or []
+            serialized_tools = []
+            for tool in tools:
+                name = cls._item_value(tool, "name")
+                input_schema = cls._item_value(tool, "input_schema")
+                if hasattr(input_schema, "model_dump"):
+                    input_schema = input_schema.model_dump(
+                        mode="json", exclude_none=True, by_alias=True
+                    )
+                if not name or not isinstance(input_schema, dict):
+                    serialized_tools = []
+                    break
+                serialized = {"name": name, "input_schema": input_schema}
+                for optional in ("annotations", "description"):
+                    value = cls._item_value(tool, optional)
+                    if hasattr(value, "model_dump"):
+                        value = value.model_dump(
+                            mode="json", exclude_none=True, by_alias=True
+                        )
+                    if value is not None:
+                        serialized[optional] = value
+                serialized_tools.append(serialized)
+            names = [tool["name"] for tool in serialized_tools]
+            if (
+                not item_id
+                or len(names) != len(set(names))
+                or set(names) != set(expected_tools)
+            ):
+                continue
+            return {
+                "id": item_id,
+                "type": "mcp_list_tools",
+                "server_label": MCP_SERVER_LABEL,
+                "tools": serialized_tools,
+            }
+        return None
+
+    def _current_review_discovery(self) -> dict[str, Any] | None:
+        if time.monotonic() >= self._review_mcp_discovery_expires_at:
+            self._clear_review_discovery()
+        return self._review_mcp_discovery
+
+    def _clear_review_discovery(self) -> None:
+        self._review_mcp_discovery = None
+        self._review_mcp_discovery_expires_at = 0.0
+
+    @staticmethod
+    def _review_input(
+        prompt: dict[str, Any], discovery: dict[str, Any] | None
+    ) -> str | list[dict[str, Any]]:
+        serialized_prompt = json.dumps(prompt)
+        if discovery is None:
+            return serialized_prompt
+        return [
+            discovery,
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": serialized_prompt}],
+            },
+        ]
+
     def review(
         self,
         sku_ids: list[str],
         description_overrides: dict[str, str] | None = None,
+        progress_callback: ProgressCallback | None = None,
     ) -> dict[str, Any]:
+        def report(message: str) -> None:
+            if progress_callback is not None:
+                progress_callback(message)
+
         if not sku_ids:
             raise ValueError("Select at least one SKU")
+        report(
+            f"Preparing a structured tariff-review request for {len(sku_ids)} "
+            f"selected SKU{'s' if len(sku_ids) != 1 else ''}."
+        )
         run_id = f"RUN-{uuid.uuid4().hex[:10].upper()}"
         overrides = description_overrides or {}
         prompt = {
@@ -398,49 +599,101 @@ class TariffReviewClient:
             "description_overrides": overrides,
             "required_tool_behavior": [
                 (
-                    "Fetch every selected product with get_catalog. Pass the exact "
-                    "description_overrides object supplied above to get_catalog so "
-                    "review-only edits replace the stored descriptions for this run."
+                    "Call get_catalog exactly once with client_id, the complete sku_ids "
+                    "array above in the same order, and the exact description_overrides "
+                    "object above."
                 ),
-                "Fetch every selected product's entries.",
+                (
+                    "Call get_entries exactly once with client_id and the complete "
+                    "sku_ids array above in the same order."
+                ),
                 "Search the HTS cache and fetch every cited ruling.",
                 "Do not call draft_correction during review.",
             ],
         }
+        reusable_discovery = self._current_review_discovery()
+        discovery_reused = reusable_discovery is not None
+        report(
+            "Responses API · submitting the review with five allowlisted MCP tools "
+            "for product, entry, HTS, and ruling evidence."
+        )
+        if discovery_reused:
+            report(
+                "MCP · reusing recent validated tool discovery for the same "
+                "five-tool review policy."
+            )
         started = time.perf_counter()
         response = self.client.responses.create(
             model=self.config.model,
             service_tier=self.config.service_tier,
             instructions=self.instructions,
-            input=json.dumps(prompt),
+            input=self._review_input(prompt, reusable_discovery),
             tools=[
                 self._mcp_tool(
-                    READ_TOOLS,
-                    {"never": {"tool_names": READ_TOOLS}},
+                    REVIEW_TOOLS,
+                    {"never": {"tool_names": REVIEW_TOOLS}},
                 )
             ],
             text={"format": strict_response_format()},
             store=True,
         )
         elapsed = time.perf_counter() - started
-        self._validate_response(response)
+        report("Responses API · response received; checking completion and tool errors.")
+        try:
+            self._validate_response(response)
+        except Exception:
+            self._clear_review_discovery()
+            raise
+        discovered = self._reusable_mcp_discovery(response, REVIEW_TOOLS)
+        if discovered is not None:
+            self._review_mcp_discovery = discovered
+            self._review_mcp_discovery_expires_at = (
+                time.monotonic() + MCP_DISCOVERY_TTL_SECONDS
+            )
+        elif any(
+            self._item_type(item) == "mcp_list_tools"
+            for item in getattr(response, "output", [])
+        ):
+            self._clear_review_discovery()
         proposal = ClassificationProposal.model_validate_json(response.output_text)
         if proposal.run_id != run_id or proposal.client_id != "northfield-home-goods":
             raise ResponseValidationError("Response run/client identity did not match")
         trace = self._mcp_trace(response)
-        if overrides:
-            override_catalog_calls = [
-                call
-                for call in trace
-                if call["name"] == "get_catalog"
-                and not call["error"]
-                and isinstance(call["arguments"], dict)
-                and call["arguments"].get("description_overrides") == overrides
-            ]
-            if not override_catalog_calls:
-                raise ResponseValidationError(
-                    "Description overrides were not applied through get_catalog"
-                )
+        for call in trace:
+            name = call.get("name")
+            action = TOOL_PROGRESS_LABELS.get(name)
+            if action is not None:
+                result = "failed" if call.get("error") else action
+                report(f"MCP · {name} · {result}.")
+        report(
+            "Validation · checking the strict output schema, selected-SKU coverage, "
+            "and fetched citation/HTS provenance."
+        )
+        catalog_calls = [
+            call for call in trace if call["name"] == "get_catalog" and not call["error"]
+        ]
+        if len(catalog_calls) != 1 or catalog_calls[0]["arguments"] != {
+            "client_id": "northfield-home-goods",
+            "sku_ids": sku_ids,
+            "description_overrides": overrides,
+        }:
+            raise ResponseValidationError(
+                "get_catalog must be called exactly once with the complete SKU batch "
+                "and exact description overrides"
+            )
+        declared_codes = self._catalog_declared_codes(
+            catalog_calls[0]["output"], sku_ids
+        )
+        entry_calls = [
+            call for call in trace if call["name"] == "get_entries" and not call["error"]
+        ]
+        if len(entry_calls) != 1 or entry_calls[0]["arguments"] != {
+            "client_id": "northfield-home-goods",
+            "sku_ids": sku_ids,
+        }:
+            raise ResponseValidationError(
+                "get_entries must be called exactly once with the complete SKU batch"
+            )
         fetched_ruling_ids = {
             str(call["arguments"].get("ruling_id", "")).upper()
             for call in trace
@@ -469,19 +722,35 @@ class TariffReviewClient:
             )
 
         selected = set(sku_ids)
-        returned = {finding.sku_id for finding in proposal.findings}
-        if returned != selected:
+        returned_ids = [finding.sku_id for finding in proposal.findings]
+        returned = set(returned_ids)
+        if returned != selected or len(returned_ids) != len(selected):
             raise ResponseValidationError(
                 f"Response SKU coverage mismatch: expected {sorted(selected)}, got {sorted(returned)}"
             )
 
         calculations: dict[str, dict[str, Any]] = {}
         for finding in proposal.findings:
-            if finding.proposed_code and finding.proposed_code != finding.declared_code:
+            declared_code = declared_codes[finding.sku_id]
+            if finding.proposed_code == declared_code:
+                if finding.outcome != "confirmed":
+                    raise ResponseValidationError(
+                        f"Unchanged classification for {finding.sku_id} must be confirmed"
+                    )
+                continue
+            if finding.outcome == "confirmed":
+                raise ResponseValidationError(
+                    f"Confirmed finding for {finding.sku_id} changed the tariff code"
+                )
+            if finding.proposed_code:
+                report(
+                    f"Application · DutyCalculator.compute_duty_delta · calculating "
+                    f"the base-duty difference for {finding.sku_id}."
+                )
                 result = self.calculator.compute_duty_delta(
                     proposal.client_id,
                     finding.sku_id,
-                    finding.declared_code,
+                    declared_code,
                     finding.proposed_code,
                 )
                 if result["direction"] != finding.outcome:
@@ -500,16 +769,47 @@ class TariffReviewClient:
             for item in calculations.values()
             if Decimal(item["potential_base_duty_difference"]) < 0
         )
+        discovery_inventory = self._mcp_inventory(response)
+        if not discovery_inventory and reusable_discovery is not None:
+            discovery_inventory = [
+                {
+                    "server_label": reusable_discovery["server_label"],
+                    "tool_names": sorted(
+                        tool["name"] for tool in reusable_discovery["tools"]
+                    ),
+                    "error": None,
+                }
+            ]
+        proposal_payload = proposal.model_dump(mode="json")
+        proposal_payload["status"] = (
+            "incomplete"
+            if any(
+                finding["outcome"] == "needs_info"
+                for finding in proposal_payload["findings"]
+            )
+            else "complete"
+        )
+        for finding in proposal_payload["findings"]:
+            finding["declared_code"] = declared_codes[finding["sku_id"]]
         review = {
-            "proposal": proposal.model_dump(mode="json"),
+            "proposal": proposal_payload,
+            "review_scope": {
+                "source_revision": self.repository.source_revision,
+                "duty_scope": "Column 1 General base duty only",
+                "warnings": [
+                    "Potential duty differences are not guaranteed refunds.",
+                    "Chapter 99 duties, trade remedies, preference programs, and recovery eligibility are excluded.",
+                ],
+            },
             "calculations": calculations,
             "mcp_trace": trace,
             "remote_mcp": {
                 "transport": (
                     "secure_mcp_tunnel" if self.config.tunnel_id else "authenticated_https"
                 ),
-                "server_label": "harbor_crane_tariff_review",
-                "tool_discovery": self._mcp_inventory(response),
+                "server_label": MCP_SERVER_LABEL,
+                "tool_discovery": discovery_inventory,
+                "tool_discovery_reused": discovery_reused,
                 "successful_calls": [
                     call["name"] for call in trace if not call["error"]
                 ],
@@ -519,6 +819,7 @@ class TariffReviewClient:
             "potential_underpayment_total": f"{underpayment:.2f}",
             "execution": self._usage_record(response, elapsed),
         }
+        report("Audit record · saving the validated proposal, MCP trace, and calculations.")
         destination = PROJECT_ROOT / "runs" / f"{run_id}.json"
         destination.write_text(json.dumps(review, indent=2), encoding="utf-8")
         return review

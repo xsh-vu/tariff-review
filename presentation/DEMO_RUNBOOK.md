@@ -6,7 +6,7 @@
 2. Run `.venv/bin/python -m scripts.live_preflight`; require every check to pass.
 3. Run `.venv/bin/python -m evals.live` and confirm the measured result appears in the UI.
 4. Run `.venv/bin/pytest -q` and `.venv/bin/python -m evals.run`.
-5. Start `.venv/bin/streamlit run app/ui.py` and keep the deterministic fixture preview available as the clearly labeled fallback.
+5. Start `.venv/bin/streamlit run app/ui.py`. The reviewer UI should show only the live Responses API + MCP workflow.
 6. Open `NF-DW-001` through `NF-DW-004` as the initial selection.
 
 ## Talk track
@@ -50,4 +50,4 @@ Use the deck's illustrative assumption: five audits per quarter at a $7,500 fixe
 
 ## Fallback
 
-If the API or remote MCP path is unavailable, switch to **Deterministic fixture preview** and say so before running it. Show `evals/results.json` only as fixture behavior: 14 of 14 deterministic cases passed. Do not describe fixture timing, correctness, or dollars as model measurements.
+If the API or remote MCP path is unavailable, stop the panel-facing app and restart it with `ENABLE_FIXTURE_PREVIEW=true .venv/bin/streamlit run app/ui.py`. Open the **Presenter-only emergency fallback**, select **Emergency deterministic fixture preview**, and say so before running it. Show `evals/results.json` only as application regression behavior: 14 of 14 deterministic cases passed. Do not describe fixture timing, correctness, or dollars as model measurements.

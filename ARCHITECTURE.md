@@ -1,7 +1,7 @@
 # ARCHITECTURE.md — Tariff Classification Review
 
 **Status:** Authenticated Responses API + private MCP tunnel vertical slice validated end to end — v0.6  
-**Last updated:** 2026-10-18  
+**Last updated:** 2026-10-19
 **Selected product surface:** OpenAI Platform and APIs  
 **Companion documents:** `PROJECT.md` (product intent), `AGENTS.md` (Codex development instructions)
 
@@ -9,13 +9,14 @@
 
 ### OpenAI documentation validation record
 
-Validated on 2026-10-18 using the configured OpenAI Developer Documentation MCP server and the current Responses API OpenAPI description. This is a documentation-level validation, not a live API or MCP interoperability test.
+Validated on 2026-10-19 using the configured OpenAI Developer Documentation MCP server and the current Responses API OpenAPI description. This is a documentation-level validation, not a live API or MCP interoperability test.
 
 | Area | Result | Required architecture treatment |
 |---|---|---|
 | Remote MCP transport | Compatible with the proposal | Use `server_url` for a public remote MCP server over Streamable HTTP or HTTP/SSE, or `tunnel_id` for a private/local server through Secure MCP Tunnel. The official MCP Python SDK v2 server has passed local Streamable HTTP protocol checks. |
 | Remote MCP authentication | Gap corrected below | For an authenticated remote server, the application obtains and refreshes an OAuth access token separately and supplies it server-side in the MCP tool's `authorization` field. Never expose or log it in the browser. |
 | Tool restriction | Compatible, now explicit | Set `allowed_tools` to the exact tools needed for the workflow. Do not rely only on tool descriptions or prompt instructions. |
+| MCP discovery reuse | Compatible with bounded reuse | Preserve an error-free `mcp_list_tools` item in context to avoid relisting. Reuse only for the same server and exact tool policy; do not carry prior business data or reuse discovery across review and draft permission boundaries. |
 | MCP approvals | Gap corrected below | Approval requests appear as `mcp_approval_request` output items. Each approval covers one call and is continued with `previous_response_id` plus an `mcp_approval_response`, or by manually carrying response output into the next request. |
 | Structured outputs | Gap corrected below | Use `text.format` with JSON Schema and `strict: true`; the root must be an object, all fields must be required, nullable unions represent optional values, and every object must set `additionalProperties: false`. Handle refusals and incomplete responses before parsing. |
 | Model compatibility | Still requires a preflight | The selected model must support both remote MCP and Structured Outputs. Keep the model configurable and verify the combination with one live smoke test before feature work. |
@@ -97,14 +98,14 @@ The model proposes codes; the duty engine looks up rates and computes amounts. U
 
 **Financial caveat:** These are scoped *base-duty differences*, not confirmed refundable amounts. Section 301/232, IEEPA and other overlays, origin, entry status, deadlines, and legal recovery procedures are outside this initial calculation.
 
-## 5. MCP tool surface (proposed)
+## 5. MCP tool surface (implemented)
 
-The implemented demo exposes five read tools, one deterministic calculator, and one approval-gated draft tool. Chapter-note distinctions required by the three scenarios are held in the bounded evidence fixtures rather than a separate general-purpose notes tool.
+The MCP server exposes five read tools, one deterministic calculator, and one approval-gated draft tool. The model-facing review imports only the five evidence/data tools. The application invokes its local deterministic calculator after validating the model proposal; `compute_duty_delta` remains registered for direct MCP validation and server-side draft checks but is not available to the model during review. Chapter-note distinctions required by the three scenarios are held in the bounded evidence fixtures rather than a separate general-purpose notes tool.
 
 | Tool | Inputs (illustrative) | Result |
 |---|---|---|
-| `get_catalog` | `client_id`, optional `sku_ids` | SKU descriptions and declared codes |
-| `get_entries` | `client_id`, `sku_id` | Entry aggregates and affected entry references |
+| `get_catalog` | `client_id`, selected `sku_ids`, optional description overrides | All selected SKU descriptions and declared codes in one batch |
+| `get_entries` | `client_id`, selected `sku_ids` | All selected entry records in one batch |
 | `search_hts` | query/code prefix | Candidate tariff lines, text, rates, source revision |
 | `search_rulings` | query, optional heading | Short list of analogous searchable rulings |
 | `get_ruling` | ruling number | Full cached relevant facts, classification, reasoning, URL |
@@ -113,7 +114,9 @@ The implemented demo exposes five read tools, one deterministic calculator, and 
 
 All tools validate identifiers and arguments. Read tools return compact, bounded results. Search only the allowed ruling index, never the held-out evaluation set. Expose only the minimum client data required for the requested review.
 
-Configure the Responses API MCP tool with `allowed_tools` set to this reviewed tool list. A remote endpoint specified by `server_url` must be reachable by OpenAI's servers and use Streamable HTTP or HTTP/SSE. If the service stays local or private, use Secure MCP Tunnel and `tunnel_id` instead of making the service public. The official MCP Python SDK v2 implementation has passed local in-memory and Streamable HTTP tool discovery and calculator calls. Gate 2 still requires OpenAI-hosted access through the selected authenticated remote transport.
+Configure the Responses API review MCP tool with `allowed_tools` set to the five read tools. A remote endpoint specified by `server_url` must be reachable by OpenAI's servers and use Streamable HTTP or HTTP/SSE. If the service stays local or private, use Secure MCP Tunnel and `tunnel_id` instead of making the service public. The official MCP Python SDK v2 implementation has passed local in-memory and Streamable HTTP tool discovery and calculator calls. Gate 2 still requires OpenAI-hosted access through the selected authenticated remote transport.
+
+For repeated reviews in one UI session, retain only an error-free `mcp_list_tools` item whose server label and imported tool names exactly match the five-tool review policy. Reuse it for at most five minutes by including it with the new review input; this avoids relisting while keeping prior product data, tool outputs, and model conclusions out of the new run. Expired, incomplete, mismatched, or failed discovery is discarded. Draft requests use a different one-tool allowlist and never reuse review discovery. The approval continuation safely retains its own discovery through `previous_response_id`.
 
 For an authenticated public remote MCP server, the web application—not the browser—owns OAuth client registration, access-token acquisition, refresh, expiry handling, and revocation. It supplies the current access token in the MCP tool's `authorization` field when creating or continuing a Response. Tokens stay in server-side secret storage, are never placed in model instructions or tool arguments, and are redacted from logs. The prototype must not deploy an unauthenticated public MCP endpoint. If the demo uses `tunnel_id`, document the tunnel's authentication and operator access separately.
 
@@ -123,7 +126,7 @@ Illustrative reviewed policy for a public remote demo server:
 {
   "type": "mcp",
   "server_label": "tariff_review",
-  "server_description": "Read versioned tariff evidence, compute deterministic duty deltas, and create an approval-gated local draft.",
+  "server_description": "Read versioned tariff evidence for a bounded classification review.",
   "server_url": "https://example.invalid/mcp",
   "authorization": "<server-side OAuth access token>",
   "allowed_tools": [
@@ -131,9 +134,7 @@ Illustrative reviewed policy for a public remote demo server:
     "get_entries",
     "search_hts",
     "search_rulings",
-    "get_ruling",
-    "compute_duty_delta",
-    "draft_correction"
+    "get_ruling"
   ],
   "require_approval": {
     "never": {
@@ -142,15 +143,14 @@ Illustrative reviewed policy for a public remote demo server:
         "get_entries",
         "search_hts",
         "search_rulings",
-        "get_ruling",
-        "compute_duty_delta"
+        "get_ruling"
       ]
     }
   }
 }
 ```
 
-This scoped exception leaves `draft_correction` approval-required. During initial integration, replace the scoped policy with `"always"`. For a private/local server, replace `server_url` with `tunnel_id` and validate the tunnel-specific authentication path. MCP read/write annotations should accurately describe each tool, but annotations do not replace the explicit allowlist, approval policy, or server-side authorization.
+The correction-draft request uses a separate MCP definition with `allowed_tools: ["draft_correction"]` and `require_approval: "always"`. During initial integration, replace the review's scoped policy with `"always"`. For a private/local server, replace `server_url` with `tunnel_id` and validate the tunnel-specific authentication path. MCP read/write annotations should accurately describe each tool, but annotations do not replace the explicit allowlist, approval policy, or server-side authorization.
 
 **Approval design:** Treat the Responses API MCP approval mechanism as one layer, not the only security boundary. Start development with the default approval behavior or `require_approval: "always"` so every MCP data disclosure is visible. After the synthetic read payloads and project-owned server have been reviewed, the demo may use a scoped policy that skips approval only for the named read tools. Do not set a server-wide `"never"` policy while `draft_correction` is available.
 
@@ -163,7 +163,7 @@ The MCP server must independently verify that the referenced review is in an app
 1. **Start:** Dana selects Northfield and a representative SKU subset; the UI creates a run ID and calls the orchestrator.
 2. **Gather:** The model uses permitted MCP read tools to retrieve product facts, HTS provisions/notes, and analogous rulings.
 3. **Assess:** It confirms a declared code, proposes a supported alternative, or abstains and identifies missing facts. Cite the deciding rule and fetched evidence.
-4. **Price:** For every changed classification, call the deterministic duty calculator. No model-authored rates or dollars.
+4. **Price:** For every changed classification, the orchestrator invokes the deterministic duty calculator directly after validating the proposal. The calculator is not model-visible, and no model-authored rates or dollars are accepted.
 5. **Validate:** Application checks schema, known codes, retrieved citation IDs, calculator provenance, consistency, and appropriate underpayment escalation. Reject or mark incomplete on material validation failures.
 6. **Present:** Show prioritized findings, separate overpayment/underpayment totals, affected entries, evidence links, uncertainties, and measured API cost.
 7. **Approve:** Dana inspects the exact pending tool name and arguments and explicitly authorizes or denies that single correction draft. Continue the Responses flow with an `mcp_approval_response` associated with the returned approval-request ID and previous response, while the MCP server separately checks application-owned approval state. Never file with CBP.
@@ -185,12 +185,18 @@ Request Structured Outputs through the Responses API using `text.format` with a 
 - every object, including nested objects, sets `additionalProperties: false`; and
 - unsupported JSON Schema keywords are not used.
 
-Proposed model fields:
+Implemented compact model fields:
 
-- `run_id`, `client_id`, `status` (`complete` / `incomplete`), `scope`, `source_revision`
-- `findings[]`: `sku_id`, `declared_code`, `proposed_code` (nullable), `outcome` (`potential_overpayment`, `potential_underpayment`, `needs_info`, `confirmed`), `deciding_rule`, `legal_notes_cited[]`, `rulings_cited[]`, `confidence_or_uncertainty`, `recommended_action`, `route_to` (`broker`, `counsel`, `supplier`)
-- `missing_information[]`: `sku_id`, required fact
-- `warnings[]`
+- `run_id`, `client_id`, `status` (`complete` / `incomplete`)
+- `findings[]`: `sku_id`, `proposed_code` (nullable), `outcome` (`potential_overpayment`, `potential_underpayment`, `needs_info`, `confirmed`), concise `deciding_rule`, `legal_notes_cited[]`, `rulings_cited[]`, `route_to` (`broker`, `counsel`, `supplier`), and nullable `missing_fact`
+
+Declared codes, scope, tariff revision, standard warnings, recommended actions, and generic
+broker-verification language are application-owned rather than repeated in model
+output. Declared codes are hydrated from the validated `get_catalog` result and
+checked against the application record. Missing information is represented once
+on its finding. The client also
+requires one complete batched `get_catalog` call and one complete batched
+`get_entries` call for every review.
 
 The model contract deliberately excludes duty rates, duty amounts, aggregate totals, API cost, validation errors, and approval state. Those fields are owned by deterministic application code.
 

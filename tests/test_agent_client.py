@@ -7,6 +7,7 @@ import pytest
 from agent.client import (
     LiveConfigurationError,
     OpenAIConfig,
+    ResponseValidationError,
     TariffReviewClient,
 )
 from agent.fixture_review import FixtureReviewer
@@ -15,17 +16,31 @@ from server.approval import ApprovalStore
 
 
 class FakeResponses:
-    def __init__(self, omit_ruling: str | None = None) -> None:
+    def __init__(
+        self,
+        omit_ruling: str | None = None,
+        discovery_tools: list[str] | None = None,
+    ) -> None:
         self.omit_ruling = omit_ruling
+        self.discovery_tools = discovery_tools
         self.calls = []
 
     def create(self, **kwargs):
         self.calls.append(kwargs)
-        request = json.loads(kwargs["input"])
+        request_input = kwargs["input"]
+        reused_discovery = isinstance(request_input, list)
+        if reused_discovery:
+            user_item = request_input[-1]
+            request = json.loads(user_item["content"][0]["text"])
+        else:
+            request = json.loads(request_input)
         proposal = FixtureReviewer().review(
             request["sku_ids"], request.get("description_overrides")
         )["proposal"]
         proposal["run_id"] = request["run_id"]
+        proposal.pop("status")
+        for finding in proposal["findings"]:
+            finding.pop("declared_code")
         repository = Repository()
 
         def call(name, arguments, output):
@@ -37,23 +52,70 @@ class FakeResponses:
                 error=None,
             )
 
-        output = [
-            call(
-                "get_catalog",
-                {
-                    "client_id": "northfield-home-goods",
-                    "sku_ids": request["sku_ids"],
-                    "description_overrides": request.get("description_overrides", {}),
-                },
-                repository.get_catalog("northfield-home-goods", request["sku_ids"]),
-            ),
-            call(
-                "get_entries",
-                {"client_id": "northfield-home-goods", "sku_id": "NF-DW-001"},
-                repository.get_entries("northfield-home-goods", "NF-DW-001"),
-            ),
-            call("search_hts", {"query": "drinkware"}, repository.rates),
-        ]
+        output = []
+        if not reused_discovery:
+            discovered_names = (
+                self.discovery_tools
+                if self.discovery_tools is not None
+                else kwargs["tools"][0]["allowed_tools"]
+            )
+            output.append(
+                SimpleNamespace(
+                    id="mcpl_test",
+                    type="mcp_list_tools",
+                    server_label="harbor_crane_tariff_review",
+                    tools=[
+                        SimpleNamespace(
+                            name=name,
+                            input_schema={
+                                "type": "object",
+                                "properties": {},
+                                "additionalProperties": False,
+                            },
+                            annotations={"readOnlyHint": True},
+                            description=f"Test schema for {name}",
+                        )
+                        for name in discovered_names
+                    ],
+                    error=None,
+                )
+            )
+        catalog_records = repository.get_catalog(
+            "northfield-home-goods", request["sku_ids"]
+        )
+        if hasattr(self, "catalog_declared_code_override"):
+            for record in catalog_records:
+                record["declared_code"] = self.catalog_declared_code_override
+        output.extend(
+            [
+                call(
+                    "get_catalog",
+                    {
+                        "client_id": "northfield-home-goods",
+                        "sku_ids": request["sku_ids"],
+                        "description_overrides": request.get(
+                            "description_overrides", {}
+                        ),
+                    },
+                    {"records": catalog_records},
+                ),
+                call(
+                    "get_entries",
+                    {
+                        "client_id": "northfield-home-goods",
+                        "sku_ids": request["sku_ids"],
+                    },
+                    [
+                        entry
+                        for sku_id in request["sku_ids"]
+                        for entry in repository.get_entries(
+                            "northfield-home-goods", sku_id
+                        )
+                    ],
+                ),
+                call("search_hts", {"query": "drinkware"}, repository.rates),
+            ]
+        )
         for ruling_id in proposal["findings"][0]["rulings_cited"]:
             if ruling_id != self.omit_ruling:
                 output.append(
@@ -75,8 +137,12 @@ class FakeResponses:
 
 
 class FakeOpenAI:
-    def __init__(self, omit_ruling: str | None = None) -> None:
-        self.responses = FakeResponses(omit_ruling)
+    def __init__(
+        self,
+        omit_ruling: str | None = None,
+        discovery_tools: list[str] | None = None,
+    ) -> None:
+        self.responses = FakeResponses(omit_ruling, discovery_tools)
 
 
 class FakeApprovalResponses:
@@ -135,20 +201,114 @@ def config() -> OpenAIConfig:
 def test_review_uses_strict_schema_allowlist_and_fetched_provenance(tmp_path) -> None:
     fake = FakeOpenAI()
     client = TariffReviewClient(config=config(), openai_client=fake)
-    result = client.review(["NF-DW-001"])
+    progress_messages = []
+    result = client.review(
+        ["NF-DW-001"], progress_callback=progress_messages.append
+    )
     request = fake.responses.calls[0]
     assert request["text"]["format"]["strict"] is True
-    assert "draft_correction" not in request["tools"][0]["allowed_tools"]
+    assert request["tools"][0]["allowed_tools"] == [
+        "get_catalog",
+        "get_entries",
+        "search_hts",
+        "search_rulings",
+        "get_ruling",
+    ]
+    assert "compute_duty_delta" not in request["tools"][0]["allowed_tools"]
     assert request["tools"][0]["tunnel_id"] == "tunnel_test"
     assert result["potential_overpayment_total"] == "12480.00"
     assert result["execution"]["api_usage"]["total_tokens"] == 150
     assert result["execution"]["api_cost_usd"] is None
+    assert result["review_scope"]["source_revision"] == "2026 HTS Revision 21"
+    assert result["proposal"]["status"] == "complete"
+    assert result["proposal"]["findings"][0]["declared_code"] == "9617.00.1000"
     assert {call["name"] for call in result["mcp_trace"]} >= {
         "get_catalog",
         "get_entries",
         "search_hts",
         "get_ruling",
     }
+    catalog_calls = [
+        call for call in result["mcp_trace"] if call["name"] == "get_catalog"
+    ]
+    entry_calls = [
+        call for call in result["mcp_trace"] if call["name"] == "get_entries"
+    ]
+    assert len(catalog_calls) == 1
+    assert catalog_calls[0]["arguments"]["sku_ids"] == ["NF-DW-001"]
+    assert len(entry_calls) == 1
+    assert entry_calls[0]["arguments"]["sku_ids"] == ["NF-DW-001"]
+    assert any("Responses API" in message for message in progress_messages)
+    assert any("MCP · get_catalog" in message for message in progress_messages)
+    assert any(
+        "DutyCalculator.compute_duty_delta" in message
+        for message in progress_messages
+    )
+    assert progress_messages[-1].startswith("Audit record")
+
+
+def test_review_reuses_only_matching_recent_mcp_discovery() -> None:
+    fake = FakeOpenAI()
+    client = TariffReviewClient(config=config(), openai_client=fake)
+
+    first = client.review(["NF-DW-001"])
+    second = client.review(["NF-DW-001"])
+
+    assert first["remote_mcp"]["tool_discovery_reused"] is False
+    assert second["remote_mcp"]["tool_discovery_reused"] is True
+    second_input = fake.responses.calls[1]["input"]
+    assert isinstance(second_input, list)
+    assert len(second_input) == 2
+    assert second_input[0]["type"] == "mcp_list_tools"
+    assert {
+        tool["name"] for tool in second_input[0]["tools"]
+    } == set(fake.responses.calls[1]["tools"][0]["allowed_tools"])
+    assert second_input[-1]["role"] == "user"
+    assert second["remote_mcp"]["tool_discovery"] == first["remote_mcp"][
+        "tool_discovery"
+    ]
+
+
+def test_review_does_not_reuse_mismatched_mcp_discovery() -> None:
+    fake = FakeOpenAI(discovery_tools=["get_catalog"])
+    client = TariffReviewClient(config=config(), openai_client=fake)
+
+    client.review(["NF-DW-001"])
+    second = client.review(["NF-DW-001"])
+
+    assert isinstance(fake.responses.calls[1]["input"], str)
+    assert second["remote_mcp"]["tool_discovery_reused"] is False
+
+
+def test_review_does_not_reuse_expired_mcp_discovery() -> None:
+    fake = FakeOpenAI()
+    client = TariffReviewClient(config=config(), openai_client=fake)
+
+    client.review(["NF-DW-001"])
+    client._review_mcp_discovery_expires_at = 0.0
+    second = client.review(["NF-DW-001"])
+
+    assert isinstance(fake.responses.calls[1]["input"], str)
+    assert second["remote_mcp"]["tool_discovery_reused"] is False
+
+
+def test_review_requests_one_complete_catalog_and_entry_batch() -> None:
+    fake = FakeOpenAI()
+    client = TariffReviewClient(config=config(), openai_client=fake)
+    sku_ids = ["NF-DW-001", "NF-DW-002", "NF-DW-003", "NF-DW-004"]
+
+    result = client.review(sku_ids)
+    prompt = json.loads(fake.responses.calls[0]["input"])
+    catalog_calls = [
+        call for call in result["mcp_trace"] if call["name"] == "get_catalog"
+    ]
+    entry_calls = [
+        call for call in result["mcp_trace"] if call["name"] == "get_entries"
+    ]
+
+    assert all("exactly once" in rule for rule in prompt["required_tool_behavior"][:2])
+    assert [call["arguments"]["sku_ids"] for call in catalog_calls] == [sku_ids]
+    assert [call["arguments"]["sku_ids"] for call in entry_calls] == [sku_ids]
 
 
 def test_review_rejects_a_known_but_unfetched_citation() -> None:
@@ -180,6 +340,48 @@ def test_review_requires_description_overrides_in_catalog_call() -> None:
     assert catalog_call["arguments"]["description_overrides"] == request[
         "description_overrides"
     ]
+
+
+def test_review_rejects_missing_catalog_declared_code() -> None:
+    fake = FakeOpenAI()
+    fake.responses.catalog_declared_code_override = ""
+    client = TariffReviewClient(config=config(), openai_client=fake)
+
+    with pytest.raises(
+        ResponseValidationError,
+        match="get_catalog returned no declared code for NF-DW-001",
+    ):
+        client.review(["NF-DW-001"])
+
+
+def test_catalog_accepts_mcp_structured_list_wrapper() -> None:
+    client = TariffReviewClient(config=config(), openai_client=FakeOpenAI())
+    sku_ids = ["NF-DW-001", "NF-DW-002"]
+    records = Repository().get_catalog("northfield-home-goods", sku_ids)
+
+    declared_codes = client._catalog_declared_codes(
+        json.dumps({"result": records}), sku_ids
+    )
+
+    assert declared_codes == {
+        "NF-DW-001": "9617.00.1000",
+        "NF-DW-002": "7323.93.0080",
+    }
+
+
+def test_catalog_accepts_mcp_text_content_blocks() -> None:
+    client = TariffReviewClient(config=config(), openai_client=FakeOpenAI())
+    sku_ids = ["NF-DW-001", "NF-DW-002"]
+    records = Repository().get_catalog("northfield-home-goods", sku_ids)
+    payload = {
+        "content": [
+            {"type": "text", "text": json.dumps(record)} for record in records
+        ]
+    }
+
+    declared_codes = client._catalog_declared_codes(json.dumps(payload), sku_ids)
+
+    assert list(declared_codes) == sku_ids
 
 
 def test_public_remote_config_requires_https_and_authorization(monkeypatch) -> None:

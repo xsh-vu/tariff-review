@@ -1,10 +1,18 @@
 # Phase 1 — Candidate Evidence Set
 
+## How to read this page
+
+This page explains how the demo scenarios were constructed before the application was implemented. Northfield Home Goods is fictional, so its product records and **declared classifications** represent made-up importer data created to demonstrate realistic audit outcomes. The **product facts** are also synthetic, but they were deliberately modeled on characteristics that mattered in real CBP rulings—for example, whether a drink container has a true vacuum, whether a plastic object is useful or merely decorative, and whether a mug is porcelain or another ceramic material.
+
+The **proposed classifications**, tariff descriptions, and duty rates use real Harmonized Tariff Schedule (HTS) provisions that were checked against official U.S. International Trade Commission (USITC) sources. The cited CBP CROSS rulings are genuine public rulings used as analogous evidence. Because each ruling applies to its own facts, applying its reasoning to a Northfield product remains a review hypothesis for a licensed broker, not a binding legal conclusion.
+
+The **outcome** and **why the result may change** columns are project-authored summaries. They compare the fictional declared code with the evidence-supported alternative and explain the decisive fact in plain language. Base-rate differences use Column 1 General duties only and indicate potential differences—not guaranteed refunds or complete customs liability.
+
 **Status:** Three scenario families approved and implemented  
 **Research date:** 2026-10-18  
-**Rate basis:** Column 1 General base duty only. Candidate rates below were checked against the 2026 HTS Revision 21 material available from USITC and the cited CBP rulings. Before generating dated entries, the fixture builder must verify the rate against the HTS revision effective on each entry date.
+**Rate basis:** Column 1 General base duty only. Candidate rates below were checked against the 2026 Harmonized Tariff Schedule (HTS) Revision 21 material available from the U.S. International Trade Commission (USITC) and the cited U.S. Customs and Border Protection (CBP) rulings. Before generating dated entries, the fixture builder must verify the rate against the HTS revision effective on each entry date.
 
-The “declared” classifications below are proposed fictional Northfield records, not claims about an actual importer. A changed classification is a review hypothesis tied to the stated facts, not legal advice or proof of refund eligibility.
+The “declared” classifications below are proposed fictional importer Northfield records, not claims about an actual importer. A changed classification is a review hypothesis tied to the stated facts, not legal advice or proof of refund eligibility.
 
 ## Candidate scenario table
 
