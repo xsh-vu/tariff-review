@@ -27,6 +27,10 @@ class EntryResult(TypedDict):
     entries: list[dict[str, Any]]
 
 
+class BatchSearchResult(TypedDict):
+    results: list[dict[str, Any]]
+
+
 def get_catalog(
     client_id: str,
     sku_ids: list[str],
@@ -73,6 +77,22 @@ def search_hts(query: str, limit: int = 8) -> list[dict[str, Any]]:
     return repository.search_hts(query, limit)
 
 
+def search_hts_batch(
+    queries: list[str], limit_per_query: int = 8
+) -> BatchSearchResult:
+    """Search verified HTS records for several code or product-term queries."""
+    normalized = _validate_batch_queries(queries, limit_per_query)
+    return {
+        "results": [
+            {
+                "query": query,
+                "matches": repository.search_hts(query, limit_per_query),
+            }
+            for query in normalized
+        ]
+    }
+
+
 def search_rulings(
     query: str, family: str | None = None, limit: int = 8
 ) -> list[dict[str, Any]]:
@@ -80,9 +100,44 @@ def search_rulings(
     return repository.search_rulings(query, family, limit)
 
 
+def search_rulings_batch(
+    queries: list[str], limit_per_query: int = 8
+) -> BatchSearchResult:
+    """Return full verified CBP rulings for several ID, family, or fact queries."""
+    normalized = _validate_batch_queries(queries, limit_per_query)
+    return {
+        "results": [
+            {
+                "query": query,
+                "matches": repository.search_rulings(
+                    query, family=None, limit=limit_per_query
+                ),
+            }
+            for query in normalized
+        ]
+    }
+
+
 def get_ruling(ruling_id: str) -> dict[str, Any]:
     """Return one verified ruling summary with its official source URL."""
     return repository.get_ruling(ruling_id)
+
+
+def _validate_batch_queries(queries: list[str], limit_per_query: int) -> list[str]:
+    if not queries:
+        raise DataError("queries must contain at least one search")
+    if len(queries) > 12:
+        raise DataError("queries must contain no more than 12 searches")
+    if not 1 <= limit_per_query <= 8:
+        raise DataError("limit_per_query must be between 1 and 8")
+    normalized = []
+    for query in queries:
+        if not isinstance(query, str) or not query.strip():
+            raise DataError("each query must be a non-empty string")
+        normalized.append(query.strip())
+    if len(normalized) != len(set(normalized)):
+        raise DataError("queries must not contain duplicates")
+    return normalized
 
 
 def compute_duty_delta(

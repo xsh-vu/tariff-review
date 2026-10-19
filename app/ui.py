@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import os
+import sys
 from decimal import Decimal
 from inspect import signature
+from pathlib import Path
 from typing import Any, Callable
 
 import streamlit as st
 from dotenv import load_dotenv
+
+# Streamlit may launch this file with app/ as sys.path[0]. Ensure repository
+# packages remain importable regardless of the caller's working directory.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from agent.client import PendingDraft, TariffReviewClient, live_configuration_status
 from agent.fixture_review import FixtureReviewer
@@ -19,6 +27,7 @@ repository = Repository()
 LIVE_MODE = "Live Responses API + MCP"
 FIXTURE_MODE = "Emergency deterministic fixture preview"
 LIVE_CLIENT_STATE_KEY = "_tariff_review_live_client"
+MCP_DISCOVERY_STATE_KEY = "_tariff_review_mcp_discovery"
 
 
 def environment_flag(name: str) -> bool:
@@ -61,6 +70,9 @@ def live_client() -> TariffReviewClient:
     client = st.session_state.get(LIVE_CLIENT_STATE_KEY)
     if not isinstance(client, TariffReviewClient):
         client = TariffReviewClient()
+        client.restore_review_discovery_cache(
+            st.session_state.get(MCP_DISCOVERY_STATE_KEY)
+        )
         st.session_state[LIVE_CLIENT_STATE_KEY] = client
     return client
 
@@ -138,49 +150,56 @@ def run_review(
             overrides[edit_sku] = edited_description
     if mode == LIVE_MODE:
         client = live_client()
-        if "progress_callback" in signature(client.review).parameters:
-            return client.review(
-                sku_ids, overrides, progress_callback=progress_callback
-            )
+        try:
+            if "progress_callback" in signature(client.review).parameters:
+                return client.review(
+                    sku_ids, overrides, progress_callback=progress_callback
+                )
 
-        # Streamlit can hot-reload this UI while retaining an older imported
-        # client module. Keep that in-flight demo process usable until restart.
-        if progress_callback is not None:
-            progress_callback(
-                "Responses API · waiting for remote MCP orchestration and the "
-                "structured review result."
-            )
-        review = client.review(sku_ids, overrides)
-        if progress_callback is not None:
-            allowed_tools = {
-                "get_catalog",
-                "get_entries",
-                "search_hts",
-                "search_rulings",
-                "get_ruling",
-            }
-            call_counts: dict[str, int] = {}
-            for call in review.get("mcp_trace", []):
-                name = call.get("name")
-                if name in allowed_tools and not call.get("error"):
-                    call_counts[name] = call_counts.get(name, 0) + 1
-            if call_counts:
-                summary = ", ".join(
-                    f"{name} ×{count}" if count > 1 else name
-                    for name, count in call_counts.items()
-                )
-                progress_callback(f"MCP · actual calls returned: {summary}.")
-            progress_callback(
-                "Validation · strict structured output, selected-SKU coverage, "
-                "and evidence provenance validated."
-            )
-            for sku_id in review.get("calculations", {}):
+            # Streamlit can hot-reload this UI while retaining an older imported
+            # client module. Keep that in-flight demo process usable until restart.
+            if progress_callback is not None:
                 progress_callback(
-                    "Application · DutyCalculator.compute_duty_delta · calculated "
-                    f"the base-duty difference for {sku_id}."
+                    "Responses API · waiting for remote MCP orchestration and the "
+                    "structured review result."
                 )
-            progress_callback("Audit record · validated review saved.")
-        return review
+            review = client.review(sku_ids, overrides)
+            if progress_callback is not None:
+                allowed_tools = {
+                    "get_catalog",
+                    "get_entries",
+                    "search_hts_batch",
+                    "search_rulings_batch",
+                }
+                call_counts: dict[str, int] = {}
+                for call in review.get("mcp_trace", []):
+                    name = call.get("name")
+                    if name in allowed_tools and not call.get("error"):
+                        call_counts[name] = call_counts.get(name, 0) + 1
+                if call_counts:
+                    summary = ", ".join(
+                        f"{name} ×{count}" if count > 1 else name
+                        for name, count in call_counts.items()
+                    )
+                    progress_callback(f"MCP · actual calls returned: {summary}.")
+                progress_callback(
+                    "Validation · strict structured output, selected-SKU coverage, "
+                    "and evidence provenance validated."
+                )
+                for sku_id in review.get("calculations", {}):
+                    progress_callback(
+                        "Application · DutyCalculator.compute_duty_delta · calculated "
+                        f"the base-duty difference for {sku_id}."
+                    )
+                progress_callback("Audit record · validated review saved.")
+            return review
+        finally:
+            if hasattr(client, "export_review_discovery_cache"):
+                discovery_state = client.export_review_discovery_cache()
+                if discovery_state is None:
+                    st.session_state.pop(MCP_DISCOVERY_STATE_KEY, None)
+                else:
+                    st.session_state[MCP_DISCOVERY_STATE_KEY] = discovery_state
     if mode == FIXTURE_MODE:
         if progress_callback is not None:
             progress_callback(
@@ -378,6 +397,43 @@ def render_execution_metrics(review: dict[str, Any]) -> None:
                 f"{', '.join(remote.get('successful_calls', [])) or 'none'} · "
                 "strict structured output validated"
             )
+            breakdown = execution.get("latency_breakdown") or {}
+            segments = breakdown.get("segments") or []
+            if segments:
+                st.markdown("**Observed latency by stage**")
+                st.dataframe(
+                    [
+                        {
+                            "Stage": (
+                                f"{segment['phase']} · {segment['tool']}"
+                                if segment.get("tool")
+                                else segment["phase"]
+                            ),
+                            "Start (s)": segment["started_at_seconds"],
+                            "End (s)": segment["completed_at_seconds"],
+                            "Duration (s)": segment["duration_seconds"],
+                            "Status": segment["status"],
+                        }
+                        for segment in segments
+                    ],
+                    hide_index=True,
+                    width="stretch",
+                )
+                st.caption(
+                    breakdown.get(
+                        "note",
+                        "Observed stages may overlap and should not be summed.",
+                    )
+                )
+            elif breakdown.get("mcp_discovery_reused"):
+                st.caption(
+                    "MCP tool discovery was safely reused for this run, so no new "
+                    "discovery stage was observed."
+                )
+            timeline = breakdown.get("event_timeline") or []
+            if timeline:
+                with st.expander("Streamed event timeline"):
+                    st.dataframe(timeline, hide_index=True, width="stretch")
             basis = execution.get("cost_basis", {})
             if basis.get("pricing_source_url"):
                 st.markdown(
@@ -482,7 +538,7 @@ def render_review_tab() -> None:
             if mode == LIVE_MODE:
                 progress.write(
                     "The model can choose from these read-only MCP tools: `get_catalog`, "
-                    "`get_entries`, `search_hts`, `search_rulings`, and `get_ruling`. "
+                    "`get_entries`, `search_hts_batch`, and `search_rulings_batch`. "
                     "Duty differences are calculated afterward by application code. "
                     "Connection and tool-call lifecycle events will appear below as "
                     "the Responses API streams them."

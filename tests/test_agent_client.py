@@ -116,18 +116,45 @@ class FakeResponses:
                         )
                     ],
                 ),
-                call("search_hts", {"query": "drinkware"}, repository.rates),
+                call(
+                    "search_hts_batch",
+                    {"queries": ["selected products"]},
+                    {
+                        "results": [
+                            {
+                                "query": "selected products",
+                                "matches": repository.rates,
+                            }
+                        ]
+                    },
+                ),
             ]
         )
-        for ruling_id in proposal["findings"][0]["rulings_cited"]:
-            if ruling_id != self.omit_ruling:
-                output_items.append(
-                    call(
-                        "get_ruling",
-                        {"ruling_id": ruling_id},
-                        repository.get_ruling(ruling_id),
-                    )
-                )
+        ruling_ids = sorted(
+            {
+                ruling_id
+                for finding in proposal["findings"]
+                for ruling_id in finding["rulings_cited"]
+                if ruling_id != self.omit_ruling
+            }
+        )
+        output_items.append(
+            call(
+                "search_rulings_batch",
+                {"queries": ["selected product evidence"]},
+                {
+                    "results": [
+                        {
+                            "query": "selected product evidence",
+                            "matches": [
+                                repository.get_ruling(ruling_id)
+                                for ruling_id in ruling_ids
+                            ],
+                        }
+                    ]
+                },
+            )
+        )
         output_items.append(SimpleNamespace(type="message", content=[]))
         response = SimpleNamespace(
             id="resp_test",
@@ -266,23 +293,31 @@ def test_review_uses_strict_schema_allowlist_and_fetched_provenance(tmp_path) ->
     assert request["tools"][0]["allowed_tools"] == [
         "get_catalog",
         "get_entries",
-        "search_hts",
-        "search_rulings",
-        "get_ruling",
+        "search_hts_batch",
+        "search_rulings_batch",
     ]
     assert "compute_duty_delta" not in request["tools"][0]["allowed_tools"]
     assert request["tools"][0]["tunnel_id"] == "tunnel_test"
     assert result["potential_overpayment_total"] == "12480.00"
     assert result["execution"]["api_usage"]["total_tokens"] == 150
     assert result["execution"]["api_cost_usd"] is None
+    breakdown = result["execution"]["latency_breakdown"]
+    assert breakdown["event_timeline"]
+    assert {segment["tool"] for segment in breakdown["segments"] if segment.get("tool")} == {
+        "get_catalog",
+        "get_entries",
+        "search_hts_batch",
+        "search_rulings_batch",
+    }
+    assert "overlap" in breakdown["note"]
     assert result["review_scope"]["source_revision"] == "2026 HTS Revision 21"
     assert result["proposal"]["status"] == "complete"
     assert result["proposal"]["findings"][0]["declared_code"] == "9617.00.1000"
     assert {call["name"] for call in result["mcp_trace"]} >= {
         "get_catalog",
         "get_entries",
-        "search_hts",
-        "get_ruling",
+        "search_hts_batch",
+        "search_rulings_batch",
     }
     catalog_calls = [
         call for call in result["mcp_trace"] if call["name"] == "get_catalog"
@@ -342,15 +377,42 @@ def test_review_reuses_only_matching_recent_mcp_discovery() -> None:
     ]
 
 
-def test_review_does_not_reuse_mismatched_mcp_discovery() -> None:
+def test_review_discovery_cache_can_be_restored_by_a_new_client() -> None:
+    fake = FakeOpenAI()
+    first_client = TariffReviewClient(config=config(), openai_client=fake)
+
+    first_client.review(["NF-DW-001"])
+    state = first_client.export_review_discovery_cache()
+    assert state is not None
+    assert "authorization" not in state
+
+    second_client = TariffReviewClient(config=config(), openai_client=fake)
+    assert second_client.restore_review_discovery_cache(state) is True
+    result = second_client.review(["NF-DW-001"])
+
+    assert isinstance(fake.responses.calls[1]["input"], list)
+    assert result["remote_mcp"]["tool_discovery_reused"] is True
+
+
+def test_review_discovery_cache_rejects_a_changed_tool_policy() -> None:
+    fake = FakeOpenAI()
+    client = TariffReviewClient(config=config(), openai_client=fake)
+    client.review(["NF-DW-001"])
+    state = client.export_review_discovery_cache()
+    assert state is not None
+    state["allowed_tools"] = ["get_catalog"]
+
+    fresh_client = TariffReviewClient(config=config(), openai_client=fake)
+    assert fresh_client.restore_review_discovery_cache(state) is False
+
+
+def test_review_rejects_stale_mcp_discovery_with_restart_guidance() -> None:
     fake = FakeOpenAI(discovery_tools=["get_catalog"])
     client = TariffReviewClient(config=config(), openai_client=fake)
 
-    client.review(["NF-DW-001"])
-    second = client.review(["NF-DW-001"])
-
-    assert isinstance(fake.responses.calls[1]["input"], str)
-    assert second["remote_mcp"]["tool_discovery_reused"] is False
+    with pytest.raises(ResponseValidationError, match="Restart the local MCP server"):
+        client.review(["NF-DW-001"])
+    assert client.export_review_discovery_cache() is None
 
 
 def test_review_does_not_reuse_expired_mcp_discovery() -> None:

@@ -27,22 +27,20 @@ from server.approval import ApprovalStore
 REVIEW_TOOLS = [
     "get_catalog",
     "get_entries",
-    "search_hts",
-    "search_rulings",
-    "get_ruling",
+    "search_hts_batch",
+    "search_rulings_batch",
 ]
 DRAFT_TOOL = "draft_correction"
 MCP_SERVER_LABEL = "harbor_crane_tariff_review"
-MCP_DISCOVERY_TTL_SECONDS = 300.0
+MCP_DISCOVERY_TTL_SECONDS = 1800.0
 REVIEW_PROGRESS_HEARTBEAT_SECONDS = 4.0
 ProgressCallback = Callable[[str], None]
 
 TOOL_PROGRESS_LABELS = {
     "get_catalog": "retrieved the selected product records",
     "get_entries": "retrieved entry history",
-    "search_hts": "searched the verified HTS evidence cache",
-    "search_rulings": "searched the verified CBP ruling index",
-    "get_ruling": "retrieved a cited CBP ruling",
+    "search_hts_batch": "searched the verified HTS evidence cache in one batch",
+    "search_rulings_batch": "retrieved verified CBP ruling evidence in one batch",
 }
 
 
@@ -398,7 +396,34 @@ class TariffReviewClient:
             declared_codes_by_sku[sku_id] = declared_code
         return {sku_id: declared_codes_by_sku[sku_id] for sku_id in sku_ids}
 
-    def _usage_record(self, response: Any, elapsed: float) -> dict[str, Any]:
+    @classmethod
+    def _batch_search_matches(
+        cls, output: Any, tool_name: str
+    ) -> list[dict[str, Any]]:
+        groups = cls._record_list_tool_output(output, tool_name, "results")
+        matches: list[dict[str, Any]] = []
+        for group in groups:
+            query = group.get("query")
+            group_matches = group.get("matches")
+            if not isinstance(query, str) or not query.strip():
+                raise ResponseValidationError(
+                    f"{tool_name} returned a result without its source query"
+                )
+            if not isinstance(group_matches, list) or not all(
+                isinstance(match, dict) for match in group_matches
+            ):
+                raise ResponseValidationError(
+                    f"{tool_name} returned invalid matches for query {query!r}"
+                )
+            matches.extend(group_matches)
+        return matches
+
+    def _usage_record(
+        self,
+        response: Any,
+        elapsed: float,
+        latency_breakdown: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         usage = getattr(response, "usage", None)
         input_tokens = getattr(usage, "input_tokens", None) if usage else None
         output_tokens = getattr(usage, "output_tokens", None) if usage else None
@@ -455,6 +480,7 @@ class TariffReviewClient:
                 "total_tokens": getattr(usage, "total_tokens", None) if usage else None,
             },
             "latency_seconds": round(elapsed, 3),
+            "latency_breakdown": latency_breakdown,
             "api_cost_usd": f"{cost:.6f}" if cost is not None else None,
             "cost_basis": {
                 "status": "calculated" if cost is not None else "unavailable",
@@ -514,6 +540,33 @@ class TariffReviewClient:
         return inventories
 
     @classmethod
+    def _validate_review_discovery(cls, response: Any) -> None:
+        """Fail early when a running MCP process exposes an outdated tool policy."""
+        inventories = cls._mcp_inventory(response)
+        if not inventories:
+            return
+        expected = set(REVIEW_TOOLS)
+        for inventory in inventories:
+            if inventory["server_label"] != MCP_SERVER_LABEL:
+                raise ResponseValidationError(
+                    "Remote MCP tool discovery returned the wrong server label"
+                )
+            if inventory["error"]:
+                raise ResponseValidationError(
+                    f"Remote MCP tool discovery failed: {inventory['error']}"
+                )
+            discovered = set(inventory["tool_names"])
+            if discovered != expected:
+                missing = sorted(expected - discovered)
+                unexpected = sorted(discovered - expected)
+                raise ResponseValidationError(
+                    "Remote MCP server exposes a stale or incomplete review tool "
+                    f"policy: missing={missing}, unexpected={unexpected}. Restart "
+                    "the local MCP server so it advertises the current batch tools, "
+                    "then rerun the review."
+                )
+
+    @classmethod
     def _reusable_mcp_discovery(
         cls, response: Any, expected_tools: list[str]
     ) -> dict[str, Any] | None:
@@ -568,6 +621,73 @@ class TariffReviewClient:
             self._clear_review_discovery()
         return self._review_mcp_discovery
 
+    def _review_discovery_identity(self) -> dict[str, Any]:
+        return {
+            "version": 1,
+            "server_label": MCP_SERVER_LABEL,
+            "transport": "tunnel" if self.config.tunnel_id else "https",
+            "endpoint": self.config.tunnel_id or self.config.server_url,
+            "allowed_tools": list(REVIEW_TOOLS),
+        }
+
+    @staticmethod
+    def _valid_cached_discovery(discovery: Any) -> bool:
+        if not isinstance(discovery, dict):
+            return False
+        if discovery.get("type") != "mcp_list_tools":
+            return False
+        if discovery.get("server_label") != MCP_SERVER_LABEL:
+            return False
+        if not isinstance(discovery.get("id"), str) or not discovery["id"]:
+            return False
+        tools = discovery.get("tools")
+        if not isinstance(tools, list):
+            return False
+        names = []
+        for tool in tools:
+            if not isinstance(tool, dict):
+                return False
+            name = tool.get("name")
+            if not isinstance(name, str) or not isinstance(
+                tool.get("input_schema"), dict
+            ):
+                return False
+            names.append(name)
+        return len(names) == len(set(names)) and set(names) == set(REVIEW_TOOLS)
+
+    def export_review_discovery_cache(self) -> dict[str, Any] | None:
+        discovery = self._current_review_discovery()
+        if discovery is None:
+            return None
+        remaining = self._review_mcp_discovery_expires_at - time.monotonic()
+        if remaining <= 0:
+            return None
+        return {
+            **self._review_discovery_identity(),
+            "expires_at_epoch": time.time() + remaining,
+            "discovery": json.loads(json.dumps(discovery)),
+        }
+
+    def restore_review_discovery_cache(self, state: Any) -> bool:
+        self._clear_review_discovery()
+        if not isinstance(state, dict):
+            return False
+        identity = self._review_discovery_identity()
+        if any(state.get(key) != value for key, value in identity.items()):
+            return False
+        expires_at = state.get("expires_at_epoch")
+        if not isinstance(expires_at, (int, float)):
+            return False
+        remaining = float(expires_at) - time.time()
+        discovery = state.get("discovery")
+        if remaining <= 0 or not self._valid_cached_discovery(discovery):
+            return False
+        self._review_mcp_discovery = json.loads(json.dumps(discovery))
+        self._review_mcp_discovery_expires_at = time.monotonic() + min(
+            remaining, MCP_DISCOVERY_TTL_SECONDS
+        )
+        return True
+
     def _clear_review_discovery(self) -> None:
         self._review_mcp_discovery = None
         self._review_mcp_discovery_expires_at = 0.0
@@ -604,9 +724,11 @@ class TariffReviewClient:
         self,
         request: dict[str, Any],
         report: ProgressCallback,
-    ) -> Any:
+    ) -> tuple[Any, dict[str, Any]]:
         """Consume Responses API SSE events while keeping UI updates on its thread."""
         event_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+        wall_started = time.time()
+        started = time.perf_counter()
 
         def consume() -> None:
             try:
@@ -625,10 +747,60 @@ class TariffReviewClient:
         )
         worker.start()
 
-        started = time.perf_counter()
         final_response: Any | None = None
         item_names: dict[str, str] = {}
+        selected_at: dict[str, float] = {}
+        remote_call_started_at: dict[str, float] = {}
+        discovery_started_at: float | None = None
+        output_started_at: float | None = None
+        timeline: list[dict[str, Any]] = []
+        segments: list[dict[str, Any]] = []
         reported: set[tuple[str, str]] = set()
+
+        def elapsed() -> float:
+            return round(time.perf_counter() - started, 3)
+
+        def record_event(
+            event_type: str | None,
+            *,
+            item_id: str | None = None,
+            tool: str | None = None,
+            status: str | None = None,
+        ) -> float:
+            observed_at = elapsed()
+            event = {
+                "event": event_type or "unknown",
+                "at_seconds": observed_at,
+            }
+            if item_id:
+                event["item_id"] = item_id
+            if tool:
+                event["tool"] = tool
+            if status:
+                event["status"] = status
+            timeline.append(event)
+            return observed_at
+
+        def finish_segment(
+            phase: str,
+            started_at: float | None,
+            completed_at: float,
+            *,
+            status: str,
+            tool: str | None = None,
+        ) -> None:
+            if started_at is None:
+                return
+            segment = {
+                "phase": phase,
+                "started_at_seconds": started_at,
+                "completed_at_seconds": completed_at,
+                "duration_seconds": round(max(0.0, completed_at - started_at), 3),
+                "status": status,
+            }
+            if tool:
+                segment["tool"] = tool
+            segments.append(segment)
 
         def report_once(stage: str, item_id: str, message: str) -> None:
             key = (stage, item_id)
@@ -642,9 +814,9 @@ class TariffReviewClient:
                     timeout=REVIEW_PROGRESS_HEARTBEAT_SECONDS
                 )
             except queue.Empty:
-                elapsed = int(time.perf_counter() - started)
+                elapsed_seconds = int(time.perf_counter() - started)
                 report(
-                    f"Still working · {elapsed}s elapsed · waiting for the next "
+                    f"Still working · {elapsed_seconds}s elapsed · waiting for the next "
                     "streamed Responses API or MCP event; no timeout has been reported."
                 )
                 continue
@@ -657,6 +829,7 @@ class TariffReviewClient:
             event_type = self._item_type(payload)
             item_id = str(self._item_value(payload, "item_id") or "")
             if event_type == "response.created":
+                record_event(event_type)
                 report_once(
                     "response_created",
                     "response",
@@ -664,6 +837,7 @@ class TariffReviewClient:
                     "was accepted.",
                 )
             elif event_type == "response.in_progress":
+                record_event(event_type)
                 report_once(
                     "response_in_progress",
                     "response",
@@ -671,6 +845,7 @@ class TariffReviewClient:
                     "allowlisted evidence tools to use.",
                 )
             elif event_type == "response.mcp_list_tools.in_progress":
+                discovery_started_at = record_event(event_type, item_id=item_id)
                 report_once(
                     "discovery_started",
                     item_id,
@@ -678,12 +853,30 @@ class TariffReviewClient:
                     "allowlisted tool definitions.",
                 )
             elif event_type == "response.mcp_list_tools.completed":
+                completed_at = record_event(
+                    event_type, item_id=item_id, status="completed"
+                )
+                finish_segment(
+                    "MCP tool discovery",
+                    discovery_started_at,
+                    completed_at,
+                    status="completed",
+                )
                 report_once(
                     "discovery_completed",
                     item_id,
                     "MCP · remote connection succeeded; tool discovery completed.",
                 )
             elif event_type == "response.mcp_list_tools.failed":
+                completed_at = record_event(
+                    event_type, item_id=item_id, status="failed"
+                )
+                finish_segment(
+                    "MCP tool discovery",
+                    discovery_started_at,
+                    completed_at,
+                    status="failed",
+                )
                 report_once(
                     "discovery_failed",
                     item_id,
@@ -695,12 +888,18 @@ class TariffReviewClient:
                     output_item_id = str(self._item_value(output_item, "id") or item_id)
                     name = str(self._item_value(output_item, "name") or "MCP tool")
                     item_names[output_item_id] = name
+                    selected_at[output_item_id] = record_event(
+                        event_type, item_id=output_item_id, tool=name
+                    )
                     report_once(
                         "tool_selected",
                         output_item_id,
                         f"MCP · {name} · selected by the model; preparing the call.",
                     )
                 elif self._item_type(output_item) == "message":
+                    output_started_at = record_event(
+                        event_type, status="structured_output_started"
+                    )
                     report_once(
                         "message_started",
                         "response",
@@ -708,6 +907,7 @@ class TariffReviewClient:
                     )
             elif event_type == "response.mcp_call_arguments.done":
                 name = item_names.get(item_id, "MCP tool")
+                record_event(event_type, item_id=item_id, tool=name)
                 report_once(
                     "arguments_done",
                     item_id,
@@ -716,6 +916,9 @@ class TariffReviewClient:
                 )
             elif event_type == "response.mcp_call.in_progress":
                 name = item_names.get(item_id, "MCP tool")
+                remote_call_started_at[item_id] = record_event(
+                    event_type, item_id=item_id, tool=name, status="in_progress"
+                )
                 report_once(
                     "tool_started",
                     item_id,
@@ -723,6 +926,16 @@ class TariffReviewClient:
                 )
             elif event_type == "response.mcp_call.completed":
                 name = item_names.get(item_id, "MCP tool")
+                completed_at = record_event(
+                    event_type, item_id=item_id, tool=name, status="completed"
+                )
+                finish_segment(
+                    "MCP tool call",
+                    remote_call_started_at.get(item_id, selected_at.get(item_id)),
+                    completed_at,
+                    status="completed",
+                    tool=name,
+                )
                 action = TOOL_PROGRESS_LABELS.get(name, "tool result returned")
                 report_once(
                     "tool_completed",
@@ -731,12 +944,31 @@ class TariffReviewClient:
                 )
             elif event_type == "response.mcp_call.failed":
                 name = item_names.get(item_id, "MCP tool")
+                completed_at = record_event(
+                    event_type, item_id=item_id, tool=name, status="failed"
+                )
+                finish_segment(
+                    "MCP tool call",
+                    remote_call_started_at.get(item_id, selected_at.get(item_id)),
+                    completed_at,
+                    status="failed",
+                    tool=name,
+                )
                 report_once(
                     "tool_failed",
                     item_id,
                     f"MCP · {name} · failed; waiting for the API error details.",
                 )
             elif event_type == "response.output_text.done":
+                completed_at = record_event(
+                    event_type, status="structured_output_completed"
+                )
+                finish_segment(
+                    "Structured output generation",
+                    output_started_at,
+                    completed_at,
+                    status="completed",
+                )
                 report_once(
                     "output_done",
                     "response",
@@ -749,6 +981,7 @@ class TariffReviewClient:
             }:
                 final_response = self._item_value(payload, "response")
                 state = event_type.removeprefix("response.")
+                record_event(event_type, status=state)
                 report_once(
                     "response_terminal",
                     "response",
@@ -757,13 +990,28 @@ class TariffReviewClient:
                 )
             elif event_type == "error":
                 message = self._item_value(payload, "message") or "unknown stream error"
+                record_event(event_type, status="failed")
                 raise ResponseValidationError(f"Responses API stream error: {message}")
 
         if final_response is None:
             raise ResponseValidationError(
                 "Responses API stream ended without a terminal response event"
             )
-        return final_response
+        breakdown = {
+            "started_at": time.strftime(
+                "%Y-%m-%dT%H:%M:%SZ", time.gmtime(wall_started)
+            ),
+            "total_stream_seconds": elapsed(),
+            "segments": sorted(
+                segments, key=lambda segment: segment["started_at_seconds"]
+            ),
+            "event_timeline": timeline,
+            "note": (
+                "Timings are observed by the application from streamed lifecycle "
+                "events. Segments may overlap and should not be summed."
+            ),
+        }
+        return final_response, breakdown
 
     def review(
         self,
@@ -799,7 +1047,15 @@ class TariffReviewClient:
                     "Call get_entries exactly once with client_id and the complete "
                     "sku_ids array above in the same order."
                 ),
-                "Search the HTS cache and fetch every cited ruling.",
+                (
+                    "Call search_hts_batch exactly once with all HTS queries needed "
+                    "for the selected products."
+                ),
+                (
+                    "Call search_rulings_batch exactly once with all ruling queries "
+                    "needed for the selected products. Its matches are the complete "
+                    "ruling records used for citations."
+                ),
                 "Do not call draft_correction during review.",
             ],
         }
@@ -809,13 +1065,13 @@ class TariffReviewClient:
             "Secure MCP Tunnel" if self.config.tunnel_id else "authenticated HTTPS"
         )
         report(
-            "Responses API · opening a streamed review with five allowlisted MCP "
+            "Responses API · opening a streamed review with four allowlisted MCP "
             "tools for product, entry, HTS, and ruling evidence."
         )
         if discovery_reused:
             report(
                 "MCP · reusing recent validated tool discovery for the same "
-                "five-tool review policy."
+                "four-tool review policy."
             )
         else:
             report(
@@ -823,7 +1079,7 @@ class TariffReviewClient:
                 "the server's tool-discovery event."
             )
         started = time.perf_counter()
-        response = self._stream_review_response(
+        response, latency_breakdown = self._stream_review_response(
             {
                 "model": self.config.model,
                 "service_tier": self.config.service_tier,
@@ -841,8 +1097,10 @@ class TariffReviewClient:
             report,
         )
         elapsed = time.perf_counter() - started
+        latency_breakdown["mcp_discovery_reused"] = discovery_reused
         try:
             self._validate_response(response)
+            self._validate_review_discovery(response)
         except Exception:
             self._clear_review_discovery()
             raise
@@ -890,22 +1148,45 @@ class TariffReviewClient:
             raise ResponseValidationError(
                 "get_entries must be called exactly once with the complete SKU batch"
             )
-        fetched_ruling_ids = {
-            str(call["arguments"].get("ruling_id", "")).upper()
+        hts_calls = [
+            call
             for call in trace
-            if call["name"] == "get_ruling"
-            and isinstance(call["arguments"], dict)
-            and not call["error"]
+            if call["name"] == "search_hts_batch" and not call["error"]
+        ]
+        if len(hts_calls) != 1:
+            raise ResponseValidationError(
+                "search_hts_batch must be called exactly once during review"
+            )
+        ruling_calls = [
+            call
+            for call in trace
+            if call["name"] == "search_rulings_batch" and not call["error"]
+        ]
+        if len(ruling_calls) != 1:
+            raise ResponseValidationError(
+                "search_rulings_batch must be called exactly once during review"
+            )
+        fetched_hts_matches = self._batch_search_matches(
+            hts_calls[0]["output"], "search_hts_batch"
+        )
+        fetched_ruling_matches = self._batch_search_matches(
+            ruling_calls[0]["output"], "search_rulings_batch"
+        )
+        fetched_ruling_ids = {
+            str(record.get("ruling_id", "")).upper()
+            for record in fetched_ruling_matches
+            if isinstance(record.get("ruling_id"), str)
         }
         validate_evidence_and_codes(
             proposal, fetched_ruling_ids, self.repository.hts_codes
         )
-        fetched_hts_codes: set[str] = set()
-        for call in trace:
-            if call["name"] == "search_hts" and not call["error"]:
-                fetched_hts_codes.update(
-                    re.findall(r"\b\d{4}\.\d{2}\.\d{4}\b", self._trace_text(call["output"]))
-                )
+        fetched_hts_codes = {
+            code
+            for record in fetched_hts_matches
+            for code in re.findall(
+                r"\b\d{4}\.\d{2}\.\d{4}\b", self._trace_text(record)
+            )
+        }
         proposed_codes = {
             finding.proposed_code
             for finding in proposal.findings
@@ -914,7 +1195,8 @@ class TariffReviewClient:
         unfetched_codes = proposed_codes - fetched_hts_codes
         if unfetched_codes:
             raise ResponseValidationError(
-                f"Proposal uses HTS codes not returned by search_hts in this run: {sorted(unfetched_codes)}"
+                "Proposal uses HTS codes not returned by search_hts_batch in this "
+                f"run: {sorted(unfetched_codes)}"
             )
 
         selected = set(sku_ids)
@@ -1013,7 +1295,7 @@ class TariffReviewClient:
             "structured_output_validated": True,
             "potential_overpayment_total": f"{overpayment:.2f}",
             "potential_underpayment_total": f"{underpayment:.2f}",
-            "execution": self._usage_record(response, elapsed),
+            "execution": self._usage_record(response, elapsed, latency_breakdown),
         }
         report("Audit record · saving the validated proposal, MCP trace, and calculations.")
         destination = PROJECT_ROOT / "runs" / f"{run_id}.json"

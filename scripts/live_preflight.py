@@ -38,15 +38,14 @@ def run_preflight(output: Path = OUTPUT) -> dict[str, Any]:
             == {
                 "get_catalog",
                 "get_entries",
-                "search_hts",
-                "search_rulings",
-                "get_ruling",
+                "search_hts_batch",
+                "search_rulings_batch",
             },
             "required_mcp_tools_called": {
                 "get_catalog",
                 "get_entries",
-                "search_hts",
-                "get_ruling",
+                "search_hts_batch",
+                "search_rulings_batch",
             }.issubset(successful_calls),
             "structured_output_validated": review["structured_output_validated"] is True,
             "expected_classification": finding["outcome"] == "potential_overpayment"

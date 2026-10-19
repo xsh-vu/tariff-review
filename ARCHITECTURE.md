@@ -100,23 +100,22 @@ The model proposes codes; the duty engine looks up rates and computes amounts. U
 
 ## 5. MCP tool surface (implemented)
 
-The MCP server exposes five read tools, one deterministic calculator, and one approval-gated draft tool. The model-facing review imports only the five evidence/data tools. The application invokes its local deterministic calculator after validating the model proposal; `compute_duty_delta` remains registered for direct MCP validation and server-side draft checks but is not available to the model during review. Chapter-note distinctions required by the three scenarios are held in the bounded evidence fixtures rather than a separate general-purpose notes tool.
+The MCP server retains seven read tools (including legacy single-query helpers), one deterministic calculator, and one approval-gated draft tool. The model-facing review imports only four batch-aware evidence/data tools. The application invokes its local deterministic calculator after validating the model proposal; `compute_duty_delta` remains registered for direct MCP validation and server-side draft checks but is not available to the model during review. Chapter-note distinctions required by the three scenarios are held in the bounded evidence fixtures rather than a separate general-purpose notes tool.
 
 | Tool | Inputs (illustrative) | Result |
 |---|---|---|
 | `get_catalog` | `client_id`, selected `sku_ids`, optional description overrides | All selected SKU descriptions and declared codes in one batch |
 | `get_entries` | `client_id`, selected `sku_ids` | All selected entry records in one batch |
-| `search_hts` | query/code prefix | Candidate tariff lines, text, rates, source revision |
-| `search_rulings` | query, optional heading | Short list of analogous searchable rulings |
-| `get_ruling` | ruling number | Full cached relevant facts, classification, reasoning, URL |
+| `search_hts_batch` | several queries/code prefixes | Query-grouped candidate tariff lines, text, rates, source revision |
+| `search_rulings_batch` | several ruling/product queries | Query-grouped full cached ruling facts, classification, reasoning, ruling ID, and URL |
 | `compute_duty_delta` | client, SKU, declared/proposed code, dates | Validated rates, amounts, signed delta, scope, error status |
 | `draft_correction` | client, SKU, codes, evidence IDs, rationale, route | **Draft only**, persisted after authorization |
 
-All tools validate identifiers and arguments. Read tools return compact, bounded results. Search only the allowed ruling index, never the held-out evaluation set. Expose only the minimum client data required for the requested review.
+All tools validate identifiers and arguments. Read tools return compact, bounded results. The small evidence index uses deterministic normalized token-overlap ranking so model-style natural-language queries can retrieve the same bounded verified records as exact code or ruling-ID queries; it does not add external or fuzzy evidence. Search only the allowed ruling index, never the held-out evaluation set. Expose only the minimum client data required for the requested review.
 
-Configure the Responses API review MCP tool with `allowed_tools` set to the five read tools. A remote endpoint specified by `server_url` must be reachable by OpenAI's servers and use Streamable HTTP or HTTP/SSE. If the service stays local or private, use Secure MCP Tunnel and `tunnel_id` instead of making the service public. The official MCP Python SDK v2 implementation has passed local in-memory and Streamable HTTP tool discovery and calculator calls. Gate 2 still requires OpenAI-hosted access through the selected authenticated remote transport.
+Configure the Responses API review MCP tool with `allowed_tools` set to the four model-facing tools. A remote endpoint specified by `server_url` must be reachable by OpenAI's servers and use Streamable HTTP or HTTP/SSE. If the service stays local or private, use Secure MCP Tunnel and `tunnel_id` instead of making the service public. The official MCP Python SDK v2 implementation has passed local in-memory and Streamable HTTP tool discovery and calculator calls. Gate 2 still requires OpenAI-hosted access through the selected authenticated remote transport.
 
-For repeated reviews in one UI session, retain only an error-free `mcp_list_tools` item whose server label and imported tool names exactly match the five-tool review policy. Reuse it for at most five minutes by including it with the new review input; this avoids relisting while keeping prior product data, tool outputs, and model conclusions out of the new run. Expired, incomplete, mismatched, or failed discovery is discarded. Draft requests use a different one-tool allowlist and never reuse review discovery. The approval continuation safely retains its own discovery through `previous_response_id`.
+For repeated reviews in one UI session, retain only an error-free `mcp_list_tools` item whose server label, transport, endpoint/tunnel ID, and four imported tool names exactly match the current review policy, and whose imported tools all contain input schemas. Reuse it for at most 30 minutes by including it with the new review input; this avoids relisting while keeping credentials, prior product data, tool outputs, and model conclusions out of the cache and the new run. Streamlit session state preserves this schema-only record across reruns and safe client recreation. Expired, incomplete, mismatched, or failed discovery is discarded. Draft requests use a different one-tool allowlist and never reuse review discovery. The approval continuation safely retains its own discovery through `previous_response_id`.
 
 For an authenticated public remote MCP server, the web application—not the browser—owns OAuth client registration, access-token acquisition, refresh, expiry handling, and revocation. It supplies the current access token in the MCP tool's `authorization` field when creating or continuing a Response. Tokens stay in server-side secret storage, are never placed in model instructions or tool arguments, and are redacted from logs. The prototype must not deploy an unauthenticated public MCP endpoint. If the demo uses `tunnel_id`, document the tunnel's authentication and operator access separately.
 
@@ -132,18 +131,16 @@ Illustrative reviewed policy for a public remote demo server:
   "allowed_tools": [
     "get_catalog",
     "get_entries",
-    "search_hts",
-    "search_rulings",
-    "get_ruling"
+    "search_hts_batch",
+    "search_rulings_batch"
   ],
   "require_approval": {
     "never": {
       "tool_names": [
         "get_catalog",
         "get_entries",
-        "search_hts",
-        "search_rulings",
-        "get_ruling"
+        "search_hts_batch",
+        "search_rulings_batch"
       ]
     }
   }

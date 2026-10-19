@@ -14,7 +14,9 @@ def test_in_memory_mcp_discovery_and_calculator_call() -> None:
                 "get_catalog",
                 "get_entries",
                 "search_hts",
+                "search_hts_batch",
                 "search_rulings",
+                "search_rulings_batch",
                 "get_ruling",
                 "compute_duty_delta",
                 "draft_correction",
@@ -41,6 +43,20 @@ def test_in_memory_mcp_discovery_and_calculator_call() -> None:
             assert {item["sku_id"] for item in entries.structured_content["entries"]} == {
                 "NF-DW-001",
                 "NF-DW-002",
+            }
+            rulings = await client.call_tool(
+                "search_rulings_batch",
+                {"queries": ["N321134", "N224817"]},
+            )
+            assert rulings.is_error is False
+            matches = [
+                match
+                for group in rulings.structured_content["results"]
+                for match in group["matches"]
+            ]
+            assert {match["ruling_id"] for match in matches} == {
+                "N321134",
+                "N224817",
             }
 
     asyncio.run(exercise())

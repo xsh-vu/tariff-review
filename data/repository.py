@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,46 @@ SOURCE_DIR = PROJECT_ROOT / "data" / "source_data"
 
 class DataError(ValueError):
     """Raised when a requested fixture or evidence record is invalid."""
+
+
+_SEARCH_STOP_WORDS = {
+    "a",
+    "an",
+    "and",
+    "for",
+    "in",
+    "of",
+    "on",
+    "or",
+    "the",
+    "to",
+    "with",
+}
+
+
+def _search_terms(value: str) -> list[str]:
+    return [
+        term
+        for term in re.findall(r"[a-z0-9]+", value.lower())
+        if term not in _SEARCH_STOP_WORDS
+    ]
+
+
+def _search_score(query: str, haystack: str) -> int:
+    """Score a tiny verified index without introducing fuzzy external evidence."""
+    query_terms = _search_terms(query)
+    haystack_terms = set(_search_terms(haystack))
+    if not query_terms:
+        return 0
+    normalized_query = " ".join(query_terms)
+    normalized_haystack = " ".join(_search_terms(haystack))
+    compact_query = "".join(query_terms)
+    compact_haystack = "".join(_search_terms(haystack))
+    if normalized_query in normalized_haystack or compact_query in compact_haystack:
+        return 1000 + len(query_terms)
+    overlap = sum(1 for term in set(query_terms) if term in haystack_terms)
+    minimum_overlap = 1 if len(set(query_terms)) == 1 else 2
+    return overlap if overlap >= minimum_overlap else 0
 
 
 def _load_json(name: str) -> Any:
@@ -80,13 +121,15 @@ class Repository:
             raise DataError("query must not be empty")
         if not 1 <= limit <= 20:
             raise DataError("limit must be between 1 and 20")
-        matches = [
-            item
-            for item in self._rate_document["rates"]
-            if normalized in item["code"].lower()
-            or normalized in item["description"].lower()
-        ]
-        return deepcopy(matches[:limit])
+        scored = []
+        for index, item in enumerate(self._rate_document["rates"]):
+            score = _search_score(
+                normalized, f"{item['code']} {item['description']}"
+            )
+            if score:
+                scored.append((score, index, item))
+        scored.sort(key=lambda match: (-match[0], match[1]))
+        return deepcopy([item for _, _, item in scored[:limit]])
 
     def search_rulings(
         self, query: str, family: str | None = None, limit: int = 8
@@ -97,7 +140,7 @@ class Repository:
         if not 1 <= limit <= 20:
             raise DataError("limit must be between 1 and 20")
         matches = []
-        for ruling in self._rulings:
+        for index, ruling in enumerate(self._rulings):
             haystack = " ".join(
                 [
                     ruling["ruling_id"],
@@ -106,9 +149,11 @@ class Repository:
                     ruling["summary"],
                 ]
             ).lower()
-            if normalized in haystack and (family is None or ruling["family"] == family):
-                matches.append(ruling)
-        return deepcopy(matches[:limit])
+            score = _search_score(normalized, haystack)
+            if score and (family is None or ruling["family"] == family):
+                matches.append((score, index, ruling))
+        matches.sort(key=lambda match: (-match[0], match[1]))
+        return deepcopy([ruling for _, _, ruling in matches[:limit]])
 
     def get_ruling(self, ruling_id: str) -> dict[str, Any]:
         for ruling in self._rulings:
