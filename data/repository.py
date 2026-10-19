@@ -56,7 +56,8 @@ class Repository:
             missing = requested - known
             if missing:
                 raise DataError(f"Unknown sku_ids: {sorted(missing)}")
-            selected = [p for p in selected if p["sku_id"] in requested]
+            products_by_sku = {p["sku_id"]: p for p in selected}
+            selected = [products_by_sku[sku_id] for sku_id in sku_ids]
         return deepcopy(selected)
 
     def get_product(self, client_id: str, sku_id: str) -> dict[str, Any]:

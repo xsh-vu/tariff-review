@@ -80,7 +80,7 @@ Then run the UI:
 .venv/bin/streamlit run app/ui.py
 ```
 
-Live review calls use a five-tool evidence-only `allowed_tools` policy, one batched catalog lookup, one batched entry lookup, compact strict `text.format` JSON Schema output, and deterministic post-validation and duty calculation in application code. A validated `mcp_list_tools` item may be reused for five minutes within the same UI session and exact review policy; prior product data and review results are not carried forward. The draft workflow uses a separate one-tool policy, pauses on one `mcp_approval_request`, displays the exact arguments, and continues with an `mcp_approval_response`. The MCP server also requires a matching, single-use local approval token before it writes a draft.
+Live review calls use a five-tool evidence-only `allowed_tools` policy, one batched catalog lookup, one batched entry lookup, compact strict `text.format` JSON Schema output, and deterministic post-validation and duty calculation in application code. The UI consumes the Responses API SSE stream to narrate MCP connection, discovery, call, and output lifecycle events as they happen; during a quiet interval it emits a four-second heartbeat without claiming unobserved work. A validated `mcp_list_tools` item may be reused for five minutes within the same UI session and exact review policy; prior product data and review results are not carried forward. The draft workflow uses a separate one-tool policy, pauses on one `mcp_approval_request`, displays the exact arguments, and continues with an `mcp_approval_response`. The MCP server also requires a matching, single-use local approval token before it writes a draft.
 
 ### Live gate
 
@@ -107,10 +107,10 @@ Run the focused live evaluation next:
 
 This records `evals/live_results.json` as repository-level technical evidence.
 The reviewer-facing Streamlit UI intentionally does not display prior evaluation
-runs; it shows only metrics from the current tariff review under **Measured OpenAI
-execution**. The live evaluation covers the four demo outcomes plus the
-product-description edit. It is still a synthetic workflow evaluation, not an
-independent held-out legal benchmark.
+runs; its separate **OpenAI execution details** tab shows only metrics from the
+current tariff review under **Measured OpenAI execution**. The live evaluation
+covers the four demo outcomes plus the product-description edit. It is still a
+synthetic workflow evaluation, not an independent held-out legal benchmark.
 
 The 2026-10-18 validation passed 6/6 focused checks with 8,455 tokens, 71.462
 seconds of aggregate API latency, and a $0.035618 published-rate cost estimate.

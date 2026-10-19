@@ -19,6 +19,14 @@ def test_get_catalog_applies_review_only_description_override() -> None:
     assert original["description"] != edited["description"]
 
 
+def test_get_catalog_preserves_requested_sku_order() -> None:
+    requested = ["NF-CE-002", "NF-DW-001", "NF-PL-003"]
+
+    records = tools.get_catalog("northfield-home-goods", requested)["records"]
+
+    assert [record["sku_id"] for record in records] == requested
+
+
 def test_get_catalog_rejects_override_for_unrequested_sku() -> None:
     with pytest.raises(DataError, match="unrequested or unknown"):
         tools.get_catalog(

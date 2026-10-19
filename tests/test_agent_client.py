@@ -1,4 +1,5 @@
 import json
+import time
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -24,6 +25,7 @@ class FakeResponses:
         self.omit_ruling = omit_ruling
         self.discovery_tools = discovery_tools
         self.calls = []
+        self.stream_delay = 0.0
 
     def create(self, **kwargs):
         self.calls.append(kwargs)
@@ -45,6 +47,7 @@ class FakeResponses:
 
         def call(name, arguments, output):
             return SimpleNamespace(
+                id=f"mcp_{name}_{len(output_items)}",
                 type="mcp_call",
                 name=name,
                 arguments=json.dumps(arguments),
@@ -52,14 +55,14 @@ class FakeResponses:
                 error=None,
             )
 
-        output = []
+        output_items = []
         if not reused_discovery:
             discovered_names = (
                 self.discovery_tools
                 if self.discovery_tools is not None
                 else kwargs["tools"][0]["allowed_tools"]
             )
-            output.append(
+            output_items.append(
                 SimpleNamespace(
                     id="mcpl_test",
                     type="mcp_list_tools",
@@ -86,7 +89,7 @@ class FakeResponses:
         if hasattr(self, "catalog_declared_code_override"):
             for record in catalog_records:
                 record["declared_code"] = self.catalog_declared_code_override
-        output.extend(
+        output_items.extend(
             [
                 call(
                     "get_catalog",
@@ -118,22 +121,74 @@ class FakeResponses:
         )
         for ruling_id in proposal["findings"][0]["rulings_cited"]:
             if ruling_id != self.omit_ruling:
-                output.append(
+                output_items.append(
                     call(
                         "get_ruling",
                         {"ruling_id": ruling_id},
                         repository.get_ruling(ruling_id),
                     )
                 )
-        output.append(SimpleNamespace(type="message", content=[]))
-        return SimpleNamespace(
+        output_items.append(SimpleNamespace(type="message", content=[]))
+        response = SimpleNamespace(
             id="resp_test",
             model="gpt-6-astra",
             status="completed",
-            output=output,
+            output=output_items,
             output_text=json.dumps(proposal),
             usage=SimpleNamespace(input_tokens=100, output_tokens=50, total_tokens=150),
         )
+        if not kwargs.get("stream"):
+            return response
+
+        def events():
+            yield SimpleNamespace(type="response.created", response=response)
+            yield SimpleNamespace(type="response.in_progress", response=response)
+            if self.stream_delay:
+                time.sleep(self.stream_delay)
+            for index, item in enumerate(output_items):
+                if item.type == "mcp_list_tools":
+                    yield SimpleNamespace(
+                        type="response.mcp_list_tools.in_progress",
+                        item_id=item.id,
+                        output_index=index,
+                    )
+                    yield SimpleNamespace(
+                        type="response.mcp_list_tools.completed",
+                        item_id=item.id,
+                        output_index=index,
+                    )
+                elif item.type == "mcp_call":
+                    yield SimpleNamespace(
+                        type="response.output_item.added",
+                        item=item,
+                        output_index=index,
+                    )
+                    yield SimpleNamespace(
+                        type="response.mcp_call_arguments.done",
+                        item_id=item.id,
+                        output_index=index,
+                        arguments=item.arguments,
+                    )
+                    yield SimpleNamespace(
+                        type="response.mcp_call.in_progress",
+                        item_id=item.id,
+                        output_index=index,
+                    )
+                    yield SimpleNamespace(
+                        type="response.mcp_call.completed",
+                        item_id=item.id,
+                        output_index=index,
+                    )
+                elif item.type == "message":
+                    yield SimpleNamespace(
+                        type="response.output_item.added",
+                        item=item,
+                        output_index=index,
+                    )
+            yield SimpleNamespace(type="response.output_text.done")
+            yield SimpleNamespace(type="response.completed", response=response)
+
+        return events()
 
 
 class FakeOpenAI:
@@ -206,6 +261,7 @@ def test_review_uses_strict_schema_allowlist_and_fetched_provenance(tmp_path) ->
         ["NF-DW-001"], progress_callback=progress_messages.append
     )
     request = fake.responses.calls[0]
+    assert request["stream"] is True
     assert request["text"]["format"]["strict"] is True
     assert request["tools"][0]["allowed_tools"] == [
         "get_catalog",
@@ -245,6 +301,23 @@ def test_review_uses_strict_schema_allowlist_and_fetched_provenance(tmp_path) ->
         for message in progress_messages
     )
     assert progress_messages[-1].startswith("Audit record")
+
+
+def test_review_reports_a_heartbeat_while_stream_is_quiet(monkeypatch) -> None:
+    import agent.client as client_module
+
+    fake = FakeOpenAI()
+    fake.responses.stream_delay = 0.03
+    monkeypatch.setattr(client_module, "REVIEW_PROGRESS_HEARTBEAT_SECONDS", 0.01)
+    progress_messages: list[str] = []
+
+    TariffReviewClient(config=config(), openai_client=fake).review(
+        ["NF-DW-001"], progress_callback=progress_messages.append
+    )
+
+    assert any(message.startswith("Still working") for message in progress_messages)
+    assert any("MCP · get_catalog · call in progress" in message for message in progress_messages)
+    assert any("MCP · get_catalog · completed" in message for message in progress_messages)
 
 
 def test_review_reuses_only_matching_recent_mcp_discovery() -> None:
@@ -309,6 +382,24 @@ def test_review_requests_one_complete_catalog_and_entry_batch() -> None:
     assert all("exactly once" in rule for rule in prompt["required_tool_behavior"][:2])
     assert [call["arguments"]["sku_ids"] for call in catalog_calls] == [sku_ids]
     assert [call["arguments"]["sku_ids"] for call in entry_calls] == [sku_ids]
+
+
+def test_review_accepts_an_added_back_product_at_the_end_of_selection() -> None:
+    fake = FakeOpenAI()
+    client = TariffReviewClient(config=config(), openai_client=fake)
+    sku_ids = ["NF-DW-001", "NF-DW-003", "NF-DW-004", "NF-DW-002"]
+
+    result = client.review(sku_ids)
+
+    catalog_call = next(
+        call for call in result["mcp_trace"] if call["name"] == "get_catalog"
+    )
+    catalog_records = json.loads(catalog_call["output"])["records"]
+    assert catalog_call["arguments"]["sku_ids"] == sku_ids
+    assert [record["sku_id"] for record in catalog_records] == sku_ids
+    assert {finding["sku_id"] for finding in result["proposal"]["findings"]} == set(
+        sku_ids
+    )
 
 
 def test_review_rejects_a_known_but_unfetched_citation() -> None:
@@ -382,6 +473,31 @@ def test_catalog_accepts_mcp_text_content_blocks() -> None:
     declared_codes = client._catalog_declared_codes(json.dumps(payload), sku_ids)
 
     assert list(declared_codes) == sku_ids
+
+
+def test_catalog_accepts_complete_records_in_a_different_order() -> None:
+    client = TariffReviewClient(config=config(), openai_client=FakeOpenAI())
+    sku_ids = ["NF-DW-003", "NF-DW-001", "NF-DW-002"]
+    records = Repository().get_catalog("northfield-home-goods", sku_ids)
+
+    declared_codes = client._catalog_declared_codes(
+        json.dumps({"records": list(reversed(records))}), sku_ids
+    )
+
+    assert list(declared_codes) == sku_ids
+
+
+def test_catalog_rejects_duplicate_records_even_when_coverage_matches() -> None:
+    client = TariffReviewClient(config=config(), openai_client=FakeOpenAI())
+    sku_ids = ["NF-DW-001", "NF-DW-002"]
+    records = Repository().get_catalog("northfield-home-goods", sku_ids)
+
+    with pytest.raises(
+        ResponseValidationError, match=r"duplicates=\['NF-DW-001'\]"
+    ):
+        client._catalog_declared_codes(
+            json.dumps({"records": [records[0], records[0], records[1]]}), sku_ids
+        )
 
 
 def test_public_remote_config_requires_https_and_authorization(monkeypatch) -> None:

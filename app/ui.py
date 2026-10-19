@@ -204,6 +204,49 @@ st.html(
         border-color: rgba(14, 116, 144, 0.32) !important;
         box-shadow: 0 8px 24px rgba(14, 116, 144, 0.08);
     }
+    .st-key-products_to_review [data-tag] {
+        background-color: rgba(37, 99, 235, 0.72) !important;
+        border: 1px solid rgba(96, 165, 250, 0.60) !important;
+        color: #ffffff !important;
+    }
+    .st-key-products_to_review [data-tag] button {
+        color: #ffffff !important;
+    }
+    .st-key-products_to_review button[aria-label="Open"] {
+        background-color: rgba(37, 99, 235, 0.72) !important;
+        border: 1px solid rgba(96, 165, 250, 0.60) !important;
+        border-radius: 0.45rem !important;
+        color: #ffffff !important;
+        min-height: 2rem;
+        min-width: 2rem;
+        margin-right: 0.25rem;
+    }
+    .st-key-products_to_review button[aria-label="Open"]:hover {
+        background-color: rgba(37, 99, 235, 0.90) !important;
+        border-color: rgba(147, 197, 253, 0.85) !important;
+    }
+    .st-key-products_to_review button[aria-label="Open"] svg {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+    }
+    .st-key-run_tariff_review button[kind="primary"] {
+        background-color: rgba(37, 99, 235, 0.72) !important;
+        border-color: rgba(96, 165, 250, 0.60) !important;
+        color: #ffffff !important;
+    }
+    .st-key-run_tariff_review button[kind="primary"]:hover {
+        background-color: rgba(37, 99, 235, 0.90) !important;
+        border-color: rgba(147, 197, 253, 0.85) !important;
+        color: #ffffff !important;
+    }
+    [data-testid="stTabs"] [data-testid="stTab"][aria-selected="true"],
+    [data-testid="stTabs"] [data-testid="stTab"][aria-selected="true"] p {
+        color: #60a5fa !important;
+    }
+    [data-testid="stTabs"] .react-aria-SelectionIndicator {
+        background-color: #3b82f6 !important;
+        border-color: #3b82f6 !important;
+    }
     </style>
     """
 )
@@ -359,6 +402,8 @@ def render_review_tab() -> None:
     products = repository.get_catalog("northfield-home-goods")
     product_by_id = {product["sku_id"]: product for product in products}
     default_skus = ["NF-DW-001", "NF-DW-002", "NF-DW-003", "NF-DW-004"]
+    if "products_to_review" not in st.session_state:
+        st.session_state.products_to_review = default_skus
     st.caption(
         "Select one or more products for the audit. To edit a product description, "
         "select only one product; its temporary review-only editor will appear below."
@@ -366,12 +411,16 @@ def render_review_tab() -> None:
     sku_ids = st.multiselect(
         "Choose products to review",
         list(product_by_id),
-        default=default_skus,
+        key="products_to_review",
         format_func=lambda sku: f"{sku} — {product_by_id[sku]['name']}",
         help=(
             "Select one or more products. When exactly one product is selected, its "
             "review-only description editor appears below."
         ),
+    )
+    st.caption(
+        "Use the blue dropdown button on the right to browse or add products. "
+        "Removing a selected product returns it to the dropdown list."
     )
 
     edit_sku: str | None = None
@@ -410,9 +459,12 @@ def render_review_tab() -> None:
         st.info("Select at least one product to run a tariff review.")
 
     run_label = "Run edited SKU review" if description_changed else "Run tariff review"
+    selected_sku_set = set(sku_ids)
+    review_sku_ids = [sku for sku in product_by_id if sku in selected_sku_set]
     if st.button(
         run_label,
         type="primary",
+        key="run_tariff_review",
         disabled=not sku_ids or not review_available,
         help=(
             "Select at least one product to review."
@@ -432,12 +484,12 @@ def render_review_tab() -> None:
                     "The model can choose from these read-only MCP tools: `get_catalog`, "
                     "`get_entries`, `search_hts`, `search_rulings`, and `get_ruling`. "
                     "Duty differences are calculated afterward by application code. "
-                    "Actual calls will be listed below after the "
-                    "Responses API returns them."
+                    "Connection and tool-call lifecycle events will appear below as "
+                    "the Responses API streams them."
                 )
             st.session_state.review = run_review(
                 mode,
-                sku_ids,
+                review_sku_ids,
                 edit_sku,
                 edited_description,
                 progress_callback=progress.write,
@@ -463,7 +515,6 @@ def render_review_tab() -> None:
     if review:
         st.divider()
         render_review_results(review)
-        render_execution_metrics(review)
 
     pending = st.session_state.get("pending_draft")
     if pending:
@@ -522,4 +573,18 @@ def render_review_tab() -> None:
                 st.caption("The draft continuation's live API metadata is included above.")
 
 
-render_review_tab()
+def render_execution_tab() -> None:
+    review = st.session_state.get("review")
+    if review:
+        render_execution_metrics(review)
+    else:
+        st.info(
+            "Run a tariff review to see its measured OpenAI execution details here."
+        )
+
+
+review_tab, execution_tab = st.tabs(["Tariff review", "OpenAI execution details"])
+with review_tab:
+    render_review_tab()
+with execution_tab:
+    render_execution_tab()

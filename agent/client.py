@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import re
+import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass
@@ -32,6 +34,7 @@ REVIEW_TOOLS = [
 DRAFT_TOOL = "draft_correction"
 MCP_SERVER_LABEL = "harbor_crane_tariff_review"
 MCP_DISCOVERY_TTL_SECONDS = 300.0
+REVIEW_PROGRESS_HEARTBEAT_SECONDS = 4.0
 ProgressCallback = Callable[[str], None]
 
 TOOL_PROGRESS_LABELS = {
@@ -351,11 +354,22 @@ class TariffReviewClient:
             catalog_output, "get_catalog", "records"
         )
         returned_skus = [record.get("sku_id") for record in records]
-        if returned_skus != sku_ids:
+        duplicate_skus = sorted(
+            {
+                str(sku_id)
+                for sku_id in returned_skus
+                if returned_skus.count(sku_id) > 1
+            }
+        )
+        missing_skus = sorted(set(sku_ids) - set(returned_skus))
+        unexpected_skus = sorted(set(returned_skus) - set(sku_ids), key=str)
+        if duplicate_skus or missing_skus or unexpected_skus:
             raise ResponseValidationError(
-                "get_catalog result did not match the selected SKU batch and order"
+                "get_catalog result did not match the selected SKU batch: "
+                f"missing={missing_skus}, unexpected={unexpected_skus}, "
+                f"duplicates={duplicate_skus}"
             )
-        declared_codes: dict[str, str] = {}
+        declared_codes_by_sku: dict[str, str] = {}
         for record in records:
             sku_id = record["sku_id"]
             if record.get("client_id") != "northfield-home-goods":
@@ -381,8 +395,8 @@ class TariffReviewClient:
                     f"get_catalog declared code did not match the application record "
                     f"for {sku_id}"
                 )
-            declared_codes[sku_id] = declared_code
-        return declared_codes
+            declared_codes_by_sku[sku_id] = declared_code
+        return {sku_id: declared_codes_by_sku[sku_id] for sku_id in sku_ids}
 
     def _usage_record(self, response: Any, elapsed: float) -> dict[str, Any]:
         usage = getattr(response, "usage", None)
@@ -573,6 +587,184 @@ class TariffReviewClient:
             },
         ]
 
+    @staticmethod
+    def _argument_summary(arguments: Any) -> str:
+        if not isinstance(arguments, str) or not arguments:
+            return "arguments received"
+        try:
+            parsed = json.loads(arguments)
+        except json.JSONDecodeError:
+            return "arguments received"
+        if not isinstance(parsed, dict):
+            return "arguments received"
+        keys = ", ".join(sorted(str(key) for key in parsed))
+        return f"arguments ready ({keys})" if keys else "arguments ready"
+
+    def _stream_review_response(
+        self,
+        request: dict[str, Any],
+        report: ProgressCallback,
+    ) -> Any:
+        """Consume Responses API SSE events while keeping UI updates on its thread."""
+        event_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+
+        def consume() -> None:
+            try:
+                stream = self.client.responses.create(stream=True, **request)
+                for event in stream:
+                    event_queue.put(("event", event))
+            except Exception as exc:
+                event_queue.put(("error", exc))
+            finally:
+                event_queue.put(("done", None))
+
+        worker = threading.Thread(
+            target=consume,
+            name="tariff-review-response-stream",
+            daemon=True,
+        )
+        worker.start()
+
+        started = time.perf_counter()
+        final_response: Any | None = None
+        item_names: dict[str, str] = {}
+        reported: set[tuple[str, str]] = set()
+
+        def report_once(stage: str, item_id: str, message: str) -> None:
+            key = (stage, item_id)
+            if key not in reported:
+                reported.add(key)
+                report(message)
+
+        while True:
+            try:
+                kind, payload = event_queue.get(
+                    timeout=REVIEW_PROGRESS_HEARTBEAT_SECONDS
+                )
+            except queue.Empty:
+                elapsed = int(time.perf_counter() - started)
+                report(
+                    f"Still working · {elapsed}s elapsed · waiting for the next "
+                    "streamed Responses API or MCP event; no timeout has been reported."
+                )
+                continue
+
+            if kind == "error":
+                raise payload
+            if kind == "done":
+                break
+
+            event_type = self._item_type(payload)
+            item_id = str(self._item_value(payload, "item_id") or "")
+            if event_type == "response.created":
+                report_once(
+                    "response_created",
+                    "response",
+                    "Responses API · streaming connection established; the request "
+                    "was accepted.",
+                )
+            elif event_type == "response.in_progress":
+                report_once(
+                    "response_in_progress",
+                    "response",
+                    "Model · reviewing the selected products and deciding which "
+                    "allowlisted evidence tools to use.",
+                )
+            elif event_type == "response.mcp_list_tools.in_progress":
+                report_once(
+                    "discovery_started",
+                    item_id,
+                    "MCP · connecting to the remote server and importing the "
+                    "allowlisted tool definitions.",
+                )
+            elif event_type == "response.mcp_list_tools.completed":
+                report_once(
+                    "discovery_completed",
+                    item_id,
+                    "MCP · remote connection succeeded; tool discovery completed.",
+                )
+            elif event_type == "response.mcp_list_tools.failed":
+                report_once(
+                    "discovery_failed",
+                    item_id,
+                    "MCP · tool discovery failed; waiting for the API failure details.",
+                )
+            elif event_type == "response.output_item.added":
+                output_item = self._item_value(payload, "item")
+                if self._item_type(output_item) == "mcp_call":
+                    output_item_id = str(self._item_value(output_item, "id") or item_id)
+                    name = str(self._item_value(output_item, "name") or "MCP tool")
+                    item_names[output_item_id] = name
+                    report_once(
+                        "tool_selected",
+                        output_item_id,
+                        f"MCP · {name} · selected by the model; preparing the call.",
+                    )
+                elif self._item_type(output_item) == "message":
+                    report_once(
+                        "message_started",
+                        "response",
+                        "Structured output · composing the cited classification findings.",
+                    )
+            elif event_type == "response.mcp_call_arguments.done":
+                name = item_names.get(item_id, "MCP tool")
+                report_once(
+                    "arguments_done",
+                    item_id,
+                    f"MCP · {name} · "
+                    f"{self._argument_summary(self._item_value(payload, 'arguments'))}.",
+                )
+            elif event_type == "response.mcp_call.in_progress":
+                name = item_names.get(item_id, "MCP tool")
+                report_once(
+                    "tool_started",
+                    item_id,
+                    f"MCP · {name} · call in progress on the remote server.",
+                )
+            elif event_type == "response.mcp_call.completed":
+                name = item_names.get(item_id, "MCP tool")
+                action = TOOL_PROGRESS_LABELS.get(name, "tool result returned")
+                report_once(
+                    "tool_completed",
+                    item_id,
+                    f"MCP · {name} · completed; {action}.",
+                )
+            elif event_type == "response.mcp_call.failed":
+                name = item_names.get(item_id, "MCP tool")
+                report_once(
+                    "tool_failed",
+                    item_id,
+                    f"MCP · {name} · failed; waiting for the API error details.",
+                )
+            elif event_type == "response.output_text.done":
+                report_once(
+                    "output_done",
+                    "response",
+                    "Structured output · generation finished; finalizing the response.",
+                )
+            elif event_type in {
+                "response.completed",
+                "response.failed",
+                "response.incomplete",
+            }:
+                final_response = self._item_value(payload, "response")
+                state = event_type.removeprefix("response.")
+                report_once(
+                    "response_terminal",
+                    "response",
+                    f"Responses API · stream finished with status {state}; validating "
+                    "the returned evidence and output.",
+                )
+            elif event_type == "error":
+                message = self._item_value(payload, "message") or "unknown stream error"
+                raise ResponseValidationError(f"Responses API stream error: {message}")
+
+        if final_response is None:
+            raise ResponseValidationError(
+                "Responses API stream ended without a terminal response event"
+            )
+        return final_response
+
     def review(
         self,
         sku_ids: list[str],
@@ -613,32 +805,42 @@ class TariffReviewClient:
         }
         reusable_discovery = self._current_review_discovery()
         discovery_reused = reusable_discovery is not None
+        transport = (
+            "Secure MCP Tunnel" if self.config.tunnel_id else "authenticated HTTPS"
+        )
         report(
-            "Responses API · submitting the review with five allowlisted MCP tools "
-            "for product, entry, HTS, and ruling evidence."
+            "Responses API · opening a streamed review with five allowlisted MCP "
+            "tools for product, entry, HTS, and ruling evidence."
         )
         if discovery_reused:
             report(
                 "MCP · reusing recent validated tool discovery for the same "
                 "five-tool review policy."
             )
+        else:
+            report(
+                f"MCP · requesting a connection through {transport}; waiting for "
+                "the server's tool-discovery event."
+            )
         started = time.perf_counter()
-        response = self.client.responses.create(
-            model=self.config.model,
-            service_tier=self.config.service_tier,
-            instructions=self.instructions,
-            input=self._review_input(prompt, reusable_discovery),
-            tools=[
-                self._mcp_tool(
-                    REVIEW_TOOLS,
-                    {"never": {"tool_names": REVIEW_TOOLS}},
-                )
-            ],
-            text={"format": strict_response_format()},
-            store=True,
+        response = self._stream_review_response(
+            {
+                "model": self.config.model,
+                "service_tier": self.config.service_tier,
+                "instructions": self.instructions,
+                "input": self._review_input(prompt, reusable_discovery),
+                "tools": [
+                    self._mcp_tool(
+                        REVIEW_TOOLS,
+                        {"never": {"tool_names": REVIEW_TOOLS}},
+                    )
+                ],
+                "text": {"format": strict_response_format()},
+                "store": True,
+            },
+            report,
         )
         elapsed = time.perf_counter() - started
-        report("Responses API · response received; checking completion and tool errors.")
         try:
             self._validate_response(response)
         except Exception:
@@ -659,12 +861,6 @@ class TariffReviewClient:
         if proposal.run_id != run_id or proposal.client_id != "northfield-home-goods":
             raise ResponseValidationError("Response run/client identity did not match")
         trace = self._mcp_trace(response)
-        for call in trace:
-            name = call.get("name")
-            action = TOOL_PROGRESS_LABELS.get(name)
-            if action is not None:
-                result = "failed" if call.get("error") else action
-                report(f"MCP · {name} · {result}.")
         report(
             "Validation · checking the strict output schema, selected-SKU coverage, "
             "and fetched citation/HTS provenance."
