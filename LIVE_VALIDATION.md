@@ -1,6 +1,9 @@
 # Live Validation Record
 
-**Date:** 2026-10-18  
+**Initial validation date:** 2026-10-18
+
+**Latest added run:** 2026-10-20
+
 **Environment:** OpenAI Responses API, GPT-6.1 Sol, default service tier, authenticated Secure MCP Tunnel, local Streamable HTTP MCP server  
 **Pricing basis:** Published OpenAI standard short-context rates observed 2026-10-18; billing records remain authoritative.
 
@@ -45,6 +48,35 @@ The final evaluation passed all six checks:
 | Estimated API cost | $0.035618 |
 | Potential overpayment total | $12,480.00 |
 | Underpayment exposure total | $6,240.00 |
+
+## Four-SKU live performance check
+
+On 2026-10-20, a fresh four-SKU Responses API review completed within the
+20-second target at an estimated cost of approximately one cent. The run reused
+the validated `mcp_list_tools` discovery item, matching the normal warm-session
+demo behavior, but it did not reuse a product result, evidence result, or prior
+model conclusion. All four read-only MCP tools executed again.
+
+| Measure | Actual result |
+|---|---:|
+| Status | Passed; all four expected outcomes returned |
+| Run ID | `RUN-11EDB47495` |
+| Response ID | `resp_0f3ac44bf2e22fb9006ad7a5aa87f487d1b71fa0b9e08a8151` |
+| Model / service tier | `gpt-6.1-sol` / default |
+| Total tokens | 3,639 |
+| Input / output tokens | 2,900 / 739 |
+| API latency | 15.147 seconds |
+| Estimated API cost | $0.011122 (1.1122 cents) |
+| MCP discovery reused | Yes; validated tool schemas only |
+| MCP calls | 4/4 successful: catalog, entries, batched HTS, batched rulings |
+| Structured Output | Validated |
+| Potential overpayment total | $12,480.00 |
+| Underpayment exposure total | $6,240.00 |
+
+The immediately preceding cold-session control also passed functionally but took
+20.879 seconds, so it did not meet the under-20-second criterion. It used 3,524
+tokens and had an estimated API cost of $0.010811. This distinction prevents the
+warm-session result from being presented as cold-start performance.
 
 ## Approval continuation and rehearsal
 
