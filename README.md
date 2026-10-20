@@ -171,7 +171,5 @@ reviews and approval/draft state are never cached.
 - [PHASE1_EVIDENCE.md](PHASE1_EVIDENCE.md) — approved scenario evidence table
 - [TODO.md](TODO.md) — phased implementation checklist
 - [LIVE_VALIDATION.md](LIVE_VALIDATION.md) — dated live metrics, failures, and rehearsal record
-- [presentation/harbor-crane-tariff-audit-demo-v2.pptx](presentation/harbor-crane-tariff-audit-demo-v2.pptx) — presentation deck
-- [presentation/DEMO_RUNBOOK.md](presentation/DEMO_RUNBOOK.md) — timed five-minute demonstration script
 
 The legal cache is intentionally narrow. Entry dates are fixed to the verified 2026 HTS revision observation date; unsupported historical dates fail instead of silently applying a current rate.
