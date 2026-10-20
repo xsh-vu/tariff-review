@@ -1,175 +1,371 @@
 # Harbor & Crane Tariff Classification Audit Demo
 
-This repository implements a bounded vertical slice for a premium tariff audit of 12 synthetic Northfield Home Goods SKUs. It uses verified CBP CROSS links, a versioned six-line HTS rate fixture, deterministic base-duty calculations, strict model output validation, and explicit broker approval before a local correction draft.
+Harbor & Crane is a fictional customs brokerage testing a premium tariff-audit
+service for its importer client, Northfield Home Goods. Dana, a licensed customs
+broker at Harbor & Crane, uses this application to identify potential base-duty
+overpayments, surface underpayment exposure, request missing product facts, and
+confirm classifications that do not need to change.
 
-No workflow files with CBP. Potential overpayments are screening estimates, not guaranteed refunds. Only Column 1 General base duties are in scope.
+The demonstration is a bounded prototype built with the OpenAI Responses API,
+remote MCP tools, strict Structured Outputs, deterministic duty calculations, and
+explicit human approval before a local correction draft is created.
 
-## Quick start
+Nothing in this application is filed with CBP. Potential overpayments are screening
+estimates, not guaranteed refunds. Calculations include only Column 1 General base
+duties; Chapter 99 duties, trade remedies, preference programs, origin, deadlines,
+and recovery eligibility are excluded.
 
-Requires Python 3.11 or newer.
+## Five-minute demo
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/pytest -q
-.venv/bin/streamlit run app/ui.py
-```
+### Start the prepared environment
 
-The panel-facing UI defaults to the live Responses API + MCP workflow. If live
-configuration is unavailable, the review action is disabled rather than silently
-falling back to local logic.
+These instructions assume `.venv`, `.env`, the `harbor-crane` tunnel profile, and
+the `tunnel-client` binary were configured previously. For first-time setup, see
+[First-time setup](#first-time-setup).
 
-The deterministic fixture implementation remains available for development,
-regression testing, and an explicitly disclosed presentation emergency. It is
-hidden by default. To expose the presenter-only fallback, start Streamlit with:
+Open three terminals in the repository root and keep all three processes running.
 
-```bash
-ENABLE_FIXTURE_PREVIEW=true .venv/bin/streamlit run app/ui.py
-```
-
-The fallback is visibly labeled as local deterministic behavior and must not be
-presented as an OpenAI API result.
-
-## Live Responses API + MCP mode
-
-Copy `.env.example` to `.env` and set `OPENAI_API_KEY`, `OPENAI_MODEL`, and exactly one of:
-
-- `MCP_TUNNEL_ID` for a private/local server exposed through Secure MCP Tunnel; or
-- `MCP_SERVER_URL` for a remotely reachable Streamable HTTP endpoint.
-
-For an authenticated remote endpoint, set `MCP_AUTH_TOKEN`. The server-side application passes that token in the MCP tool's `authorization` field; it is never put in prompts, tool arguments, or UI output. A production service must acquire, refresh, revoke, and securely store OAuth tokens outside this demo.
-
-Prefer a project service-account key over a personal key. A service account still
-authenticates through its generated secret API key, so place that value in
-`OPENAI_API_KEY`. The local `.env` is ignored by version control. Give the key only
-the permissions needed for Responses and tunnel operation, set an expiration date,
-and rotate or revoke it after the demo.
-
-Run the local Streamable HTTP MCP server:
+**Terminal 1 — local MCP server**
 
 ```bash
 .venv/bin/python -m server.mcp_server
 ```
 
-The endpoint is `/mcp` by default. Keep `MCP_HOST=127.0.0.1` when using a private tunnel. Do not expose this unauthenticated prototype directly to the public internet.
+The local Streamable HTTP endpoint listens at `http://127.0.0.1:8000/mcp` by
+default. Keep it on loopback; the Secure MCP Tunnel connects outbound to OpenAI.
 
-For the private-tunnel path, install the official
-[`openai/tunnel-client`](https://github.com/openai/tunnel-client/releases) and
-verify the release checksum. The tested setup used v0.0.16. With the local MCP
-server running, create and validate a profile, then keep the tunnel daemon
-running:
+**Terminal 2 — private tunnel**
+
+Load the runtime key from the ignored local `.env`, verify the existing profile,
+and start the tunnel:
 
 ```bash
-tunnel-client init \
-  --sample sample_mcp_remote_no_auth \
-  --profile harbor-crane \
-  --tunnel-id "$MCP_TUNNEL_ID" \
-  --mcp-server-url http://127.0.0.1:8000/mcp \
-  --control-plane-api-key-ref env:OPENAI_API_KEY
+set -a
+source .env
+set +a
+export CONTROL_PLANE_API_KEY="$OPENAI_API_KEY"
 tunnel-client doctor --profile harbor-crane --explain
 tunnel-client run --profile harbor-crane
 ```
 
-The runtime-key principal needs Tunnels Read + Use. The tunnel daemon and the
-Responses API may use the same narrowly scoped service-account key for this
-prototype; production deployments should separate credentials where practical.
+`doctor` must pass, and `run` must remain active during the demo.
 
-Then run the UI:
+**Terminal 3 — Streamlit application**
 
 ```bash
 .venv/bin/streamlit run app/ui.py
 ```
 
-Live review calls use a four-tool evidence-only `allowed_tools` policy: batched catalog, entry, HTS, and ruling retrieval. Ruling search results include their full verified records, IDs, and source URLs, so strict citation validation does not require a separate fetch call. The output uses compact strict `text.format` JSON Schema, followed by deterministic application-side validation and duty calculation. The UI consumes the Responses API SSE stream to narrate MCP connection, discovery, call, and output lifecycle events as they happen; during a quiet interval it emits a four-second heartbeat without claiming unobserved work. It also records an observed event timeline and per-tool durations, explicitly warning that overlapping stages should not be added together. A validated `mcp_list_tools` item may be reused for 30 minutes within the same Streamlit session and exact server, endpoint, and tool policy after confirming that every imported tool has an input schema; credentials, prior product data, and review results are never placed in that cache. The draft workflow uses a separate one-tool policy, pauses on one `mcp_approval_request`, displays the exact arguments, and continues with an `mcp_approval_response`. The MCP server also requires a matching, single-use local approval token before it writes a draft.
+Open [http://127.0.0.1:8501](http://127.0.0.1:8501). The page should show:
 
-### Live gate
+> Live workflow ready · OpenAI Responses API · remote MCP
 
-Keep the MCP server and `tunnel-client` running, then execute the authenticated
-one-SKU preflight:
+If it does not, use the [Troubleshooting](#troubleshooting) section rather than
+interpreting or describing the application as live.
+
+### Primary demo scenario
+
+The UI initially selects four synthetic stainless-steel drinkware SKUs. Turn on
+**Run fresh review** so the walkthrough uses a new Responses API and MCP execution.
+The expected evidence-backed outcomes are:
+
+| SKU | Product fact being tested | Expected outcome | Expected classification result | Base-duty difference |
+|---|---|---|---|---:|
+| `NF-DW-001` | Double-walled, but supplier confirms no vacuum | Potential overpayment | `9617.00.1000` → `7323.93.0080` | **+$12,480** |
+| `NF-DW-002` | Confirmed vacuum-sealed bottle | Potential underpayment—escalate | `7323.93.0080` → `9617.00.1000` | **−$6,240** |
+| `NF-DW-003` | “Insulated” without evidence that a vacuum exists | Needs more information | No proposed change until the missing fact is supplied | — |
+| `NF-DW-004` | Laboratory-confirmed complete vacuum flask | Classification confirmed | Remains `9617.00.1000` | $0 |
+
+The signed difference is:
+
+```text
+duty at declared code − duty at proposed code
+```
+
+A positive amount is a potential overpayment; a negative amount is potential
+underpayment exposure. The application totals them separately rather than netting
+them together.
+
+### Suggested review sequence
+
+1. **Run the four-SKU review.** Observe the actual lifecycle events while the
+   Responses API decides which read-only MCP tools to call.
+2. **Inspect `NF-DW-001`.** See the proposed classification, retrieved CBP ruling
+   links, and deterministic **$12,480** potential base-duty difference.
+3. **Review the safeguards.** See that `NF-DW-002` is escalated as underpayment
+   exposure, `NF-DW-003` is not guessed, and `NF-DW-004` is not falsely flagged.
+4. **Observe human approval.** Select **Prepare correction draft** for
+   `NF-DW-001`, inspect the exact pending tool arguments, and then choose **Approve
+   one draft** or **Deny draft**. Approval creates only a local, unfiled draft.
+5. **Observe how a product-fact change affects the review.** In the `NF-DW-003`
+   result, replace the review-only description with:
+
+   ```text
+   14 oz complete stainless-steel vacuum flask with laboratory-confirmed sub-atmospheric pressure between its walls.
+   ```
+
+   Select **Rerun review with updated description for NF-DW-003**. The application
+   reruns the displayed four-SKU batch with an override only for `NF-DW-003`; it
+   does not alter the stored catalog. `NF-DW-003` should change from **Needs more
+   information** to **Potential underpayment—escalate**, with a **−$4,160**
+   difference. The four-SKU underpayment total should therefore become **−$10,400**.
+6. **Open “OpenAI execution details.”** Review the current run’s response ID,
+   model, tokens, latency, estimated cost, MCP event timeline, and pinned historical
+   benchmark: 17/20 exact matches, 20/20 mechanically valid citations, and 40/40
+   successful MCP calls.
+
+Only live-mode measurements represent actual OpenAI API usage, latency, or model
+performance.
+
+### Optional live-readiness check
+
+Run these checks while the MCP server and tunnel are active:
 
 ```bash
+.venv/bin/pytest -q
 .venv/bin/python -m scripts.live_preflight
 ```
 
-The preflight writes a redacted `runs/live_preflight.json` only after attempting
-the real Responses API path. It verifies MCP tool discovery and calls, strict
-Structured Outputs, the expected classification, response metadata, and a dated
-cost estimate. A failed preflight is also recorded for technical review. On
-2026-10-18, the first authenticated attempt reached the API but failed safely
-with `credit_balance_exhausted`; no response or usage metrics are claimed for that
-attempt.
+The preflight makes a real one-SKU Responses API request and writes a redacted
+record to `runs/live_preflight.json`. Confirm that it reports `"status": "passed"`.
+It consumes API credits, so it is a deliberate readiness check rather than an
+application startup requirement.
 
-Run the focused live evaluation next:
+## First-time setup
+
+### 1. Install the Python environment
+
+Python 3.11 or newer is required.
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/pytest -q
+cp .env.example .env
+```
+
+The committed `.env.example` contains names and safe defaults only. The local
+`.env` is ignored by Git and must never be committed.
+
+### 2. Configure OpenAI and the MCP connection
+
+Set `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`. A project service-account key is
+preferred over a personal key. A service account still authenticates through its
+generated secret API key, so its secret belongs in `OPENAI_API_KEY`.
+
+Choose exactly one MCP transport:
+
+- **Private local MCP server:** set `MCP_TUNNEL_ID` and leave `MCP_SERVER_URL` and
+  `MCP_AUTH_TOKEN` blank.
+- **Authenticated public MCP server:** set an HTTPS `MCP_SERVER_URL` and
+  `MCP_AUTH_TOKEN`, and leave `MCP_TUNNEL_ID` blank. The application intentionally
+  rejects an unauthenticated public endpoint.
+
+The server-side application places the remote MCP token in the Responses API
+tool’s `authorization` field. It does not place credentials in model instructions,
+tool arguments, Streamlit session caches, or UI output.
+
+### 3. Configure Secure MCP Tunnel
+
+Create a tunnel in [OpenAI Platform tunnel settings](https://platform.openai.com/settings/organization/tunnels),
+then install the latest official
+[`openai/tunnel-client`](https://github.com/openai/tunnel-client/releases/latest)
+release and verify its checksum. The tunnel runtime key needs **Tunnels Read +
+Use**. A tunnel creator additionally needs **Tunnels Manage**.
+
+On this Intel Mac, download the macOS `x86_64`/`amd64` build. After verifying its
+published checksum and extracting the download, place the executable in the local
+user path. The tested download extracted to the path below; use the corresponding
+folder name if a newer release is installed:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+install -m 755 \
+  "$HOME/Downloads/tunnel-client-v0.0.16/tunnel-client" \
+  "$HOME/.local/bin/tunnel-client"
+command -v tunnel-client
+tunnel-client help quickstart
+```
+
+`command -v` should print `$HOME/.local/bin/tunnel-client`. This repository's
+tested shell configuration already includes `$HOME/.local/bin` in `PATH`. If a
+different terminal does not, add `export PATH="$HOME/.local/bin:$PATH"` to
+`~/.zshrc`, then open a new terminal or run `source ~/.zshrc`.
+
+With `MCP_TUNNEL_ID` and `OPENAI_API_KEY` populated in `.env`, start the local MCP
+server in another terminal, then create the profile once:
+
+```bash
+set -a
+source .env
+set +a
+export CONTROL_PLANE_API_KEY="$OPENAI_API_KEY"
+tunnel-client init \
+  --sample sample_mcp_remote_no_auth \
+  --profile harbor-crane \
+  --tunnel-id "$MCP_TUNNEL_ID" \
+  --mcp-server-url http://127.0.0.1:8000/mcp \
+  --control-plane-api-key-ref env:CONTROL_PLANE_API_KEY
+tunnel-client doctor --profile harbor-crane --explain
+```
+
+`init` creates `~/.config/tunnel-client/harbor-crane.yaml`; it is a one-time step
+for each machine. Do not create or edit that profile by hand. After `doctor` ends
+with `RESULT pass`, start the foreground daemon and leave it running:
+
+```bash
+tunnel-client run --profile harbor-crane
+```
+
+The CLI may print a generic note about creating a ChatGPT connector. That is not
+required for this application: the Responses API connects by using `MCP_TUNNEL_ID`
+from `.env`.
+
+The prototype may use one narrowly scoped service-account key for Responses and
+the tunnel runtime. A production deployment should separate credentials and add
+formal acquisition, rotation, revocation, and secret-storage controls.
+
+## What the live workflow implements
+
+The review imports only four read-only MCP tools:
+
+- `get_catalog`
+- `get_entries`
+- `search_hts_batch`
+- `search_rulings_batch`
+
+Ruling search returns full bounded records, including ruling IDs and official
+source URLs. The model response uses strict `text.format` JSON Schema. Application
+code then validates SKU coverage, tariff codes, retrieved citation IDs, and outcome
+semantics before calculating financial differences deterministically.
+
+The UI streams observed Responses API and MCP lifecycle events. During quiet
+periods it emits a four-second waiting heartbeat without claiming unobserved work.
+A validated MCP tool-discovery record may be reused for 30 minutes in the same
+Streamlit session when the server identity and tool policy match. That discovery
+cache contains schemas—not credentials, product records, tool results, or model
+conclusions.
+
+Separately, an exact validated tariff-review result may be reused for 30 minutes
+when the selected SKU batch, description overrides, model, schema, code, evidence,
+and MCP configuration are unchanged. The UI labels a result-cache hit and reports
+zero incremental OpenAI requests, MCP calls, and API cost. Select **Run fresh
+review** to bypass it. Failed reviews, approval state, and drafts are never cached.
+
+Correction drafting uses a separate one-tool MCP policy. The Responses API pauses
+on an `mcp_approval_request`; the UI displays the proposed tool and arguments; and
+the user’s decision is continued with an `mcp_approval_response`. The MCP server
+also requires a matching, current, single-use application approval token. Neither
+approval path files anything externally.
+
+These integration choices follow the official OpenAI documentation for
+[remote MCP tools and approvals](https://developers.openai.com/api/docs/guides/tools-connectors-mcp),
+[Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels),
+and [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
+
+## Evaluation evidence
+
+### Application regression suite
+
+```bash
+.venv/bin/python -m evals.run
+```
+
+This writes `evals/results.json`. It exercises deterministic workflow behavior and
+must not be described as model accuracy, API latency, or API cost.
+
+### Focused live workflow evaluation
 
 ```bash
 .venv/bin/python -m evals.live
 ```
 
-This records `evals/live_results.json` as repository-level technical evidence.
-The reviewer-facing **OpenAI execution details** tab keeps the current tariff
-review's metrics under **Measured OpenAI execution** and separately publishes a
-pinned summary of the clean 20-case historical benchmark under **Tested against
-past customs rulings**. Older workflow-evaluation runs are not shown. The live
-workflow evaluation covers the four demo outcomes plus the product-description
-edit; it remains synthetic and is not the held-out legal benchmark.
+This writes `evals/live_results.json` and covers the four primary demo outcomes,
+the description edit, remote MCP use, and strict Structured Outputs. It uses
+synthetic Northfield scenarios rather than independent historical rulings.
 
-The 2026-10-18 validation passed 6/6 focused checks with 8,455 tokens, 71.462
-seconds of aggregate API latency, and a $0.035618 published-rate cost estimate.
-See [`LIVE_VALIDATION.md`](LIVE_VALIDATION.md) for response IDs, the timed
-approval rehearsal, and the failures observed during integration.
-
-## Evaluation
+### Historical CBP CROSS benchmark
 
 ```bash
-.venv/bin/python -m evals.run
 .venv/bin/python -m evals.heldout.validate
 .venv/bin/python -m evals.heldout.run --preflight-only
 .venv/bin/python -m evals.heldout.run \
   --output evals/heldout/results/<dated-result>.json
 ```
 
-This writes `evals/results.json` as technical evidence kept in the repository.
-It is not shown in the reviewer-facing demo UI. Until live credentials and a
-reachable MCP path are configured, these results measure only deterministic
-fixture behavior. They do not claim model correctness, API latency, token use,
-or cost.
+The runner loads only sanitized product descriptions and case dates before model
+execution. It allows two read-only historical-evidence MCP tools, persists raw
+responses, and loads the hidden answer key only afterward for deterministic grading.
+See [`evals/heldout/README.md`](evals/heldout/README.md) for the methodology.
 
-The held-out commands validate and then run the 20-case historical CBP CROSS
-set, including answer isolation, dated HTS evidence, remote MCP evidence calls,
-strict structured output, and grading only after raw responses are persisted.
-See [`evals/heldout/README.md`](evals/heldout/README.md) for methodology,
-official sources, limitations, and the optional live CBP status check.
+The clean October 19, 2026 `gpt-6.1-sol` run produced:
 
-The clean October 19, 2026 `gpt-6.1-sol` run produced 17/20 exact matches,
-20/20 mechanically valid citations, and 40/40 successful MCP calls. It used
-57,563 tokens, had 9.256-second p50 and 16.059-second p95 latency, and an
-estimated published-rate cost of `$0.165598`. These are selected-case prototype
-results, not broad customs-classification accuracy; licensed-broker review and
-repeated candidate-model runs remain pending. See
-[`evals/heldout/results/README.md`](evals/heldout/results/README.md) for the
-initial failure-bearing baseline and post-fix evidence.
+- 17/20 exact and six-digit matches (85%)
+- 20/20 mechanically valid citations
+- 40/40 successful MCP calls
+- 57,563 tokens
+- 9.256-second p50 and 16.059-second p95 latency
+- `$0.165598` estimated API cost at the dated published-rate basis
 
-## Demo path
+These are selected-case prototype results across three product families—not broad
+customs-classification accuracy. Mechanical citation validity means that each cited
+identifier was retrieved through MCP; it does not prove that every legal analogy was
+persuasive. Licensed-broker review and repeated candidate-model comparisons remain
+future work. See [`evals/heldout/results/README.md`](evals/heldout/results/README.md)
+for the failure-bearing baseline, remediation run, and clean post-fix result.
 
-1. Review `NF-DW-001` through `NF-DW-004` to show an overpayment, underpayment escalation, missing-information abstention, and a correct classification.
-2. Inspect official ruling links and the deterministic $12,480 potential base-duty difference on `NF-DW-001`.
-3. Prepare a draft, inspect the exact arguments, then approve or deny it. The result remains a local, unfiled draft.
-4. Edit `NF-DW-003` to state that laboratory testing confirms a vacuum and rerun that SKU; it changes from `needs_info` to potential underpayment exposure.
-5. Show measured execution metadata. Only live mode may be presented as OpenAI API usage or latency.
+## Presenter-only emergency fallback
 
-Exact validated reruns may be served from a 30-minute, session-only result cache.
-The UI labels these results and preserves the original response metadata while
-reporting zero new OpenAI requests and MCP calls. Editing the product description,
-changing the selected batch or execution configuration, changing source/code
-dependencies, or selecting **Run fresh review** forces a new live execution. Failed
-reviews and approval/draft state are never cached.
+The normal UI never silently falls back from OpenAI to local logic. If live service
+is unavailable and an explicitly disclosed local product-behavior preview is still
+useful, start Streamlit with:
 
-## Evidence and scope
+```bash
+ENABLE_FIXTURE_PREVIEW=true .venv/bin/streamlit run app/ui.py
+```
 
-- [PROJECT.md](PROJECT.md) — product objective and scope
-- [ARCHITECTURE.md](ARCHITECTURE.md) — trust boundaries and API/MCP design
-- [PHASE1_EVIDENCE.md](PHASE1_EVIDENCE.md) — approved scenario evidence table
-- [TODO.md](TODO.md) — phased implementation checklist
-- [LIVE_VALIDATION.md](LIVE_VALIDATION.md) — dated live metrics, failures, and rehearsal record
+Select **Emergency deterministic fixture preview** in the disclosed fallback
+control. The UI labels it as local deterministic behavior. Do not interpret its
+results, timing, or correctness as an OpenAI execution.
 
-The legal cache is intentionally narrow. Entry dates are fixed to the verified 2026 HTS revision observation date; unsupported historical dates fail instead of silently applying a current rate.
+## Troubleshooting
+
+| Symptom | Check |
+|---|---|
+| Live review is disabled | Confirm `.env` contains `OPENAI_API_KEY`, `OPENAI_MODEL`, and exactly one of `MCP_TUNNEL_ID` or authenticated HTTPS `MCP_SERVER_URL`. Restart Streamlit after changing `.env`. |
+| `zsh: command not found: tunnel-client` | Install the extracted executable into `$HOME/.local/bin` as shown above, confirm that directory is in `PATH`, then open a new terminal and run `command -v tunnel-client`. |
+| `profile_load FAIL` or `harbor-crane.yaml: no such file` | The tunnel profile has not been initialized on this machine. Run the one-time `tunnel-client init` command in **Configure Secure MCP Tunnel**, then rerun `doctor`. |
+| MCP server reports `address already in use` on `127.0.0.1:8000` | Another MCP server is already listening. Run `lsof -nP -iTCP:8000 -sTCP:LISTEN`. Reuse it if its command is this repository's `.venv/bin/python -m server.mcp_server`; otherwise stop the identified process with `kill -TERM <PID>` and start the server again. |
+| MCP discovery or a tool call fails | Confirm the local MCP server is still running, confirm `tunnel-client run` is connected, and rerun `tunnel-client doctor --profile harbor-crane --explain`. |
+| `ModuleNotFoundError` when launching | Run commands from the repository root and use `.venv/bin/streamlit run app/ui.py`. |
+| Review appears not to make a new call | The exact batch may have hit the 30-minute session result cache. Check the cache notice or select **Run fresh review**. |
+| Review stops safely | Read the expanded progress log. The application intentionally rejects tool errors, missing evidence, invalid citations, unsupported codes, incomplete output, or inconsistent calculations. |
+| API reports billing or authorization failure | Verify the project, service-account permissions, API credits, and tunnel permissions in OpenAI Platform. Do not substitute fixture measurements for a failed live run. |
+
+## Shutdown and restart
+
+Each demo process runs in the foreground. Press `Control-C` once in its terminal to
+stop Streamlit, `tunnel-client`, or the MCP server cleanly. On the next demo run,
+start them again in this order:
+
+1. `.venv/bin/python -m server.mcp_server`
+2. `tunnel-client doctor --profile harbor-crane --explain`, followed by
+   `tunnel-client run --profile harbor-crane`
+3. `.venv/bin/streamlit run app/ui.py`
+
+Do not run a second copy of a service on the same port. Use the `lsof` command in
+Troubleshooting when a previous terminal was closed without stopping its process.
+
+## Repository guide
+
+- [`PROJECT.md`](PROJECT.md) — customer, business objective, scope, and success criteria
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — data flow, trust boundaries, API/MCP design, and tradeoffs
+- [`PHASE1_EVIDENCE.md`](PHASE1_EVIDENCE.md) — scenario evidence, source provenance, and classification rationale
+- [`LIVE_VALIDATION.md`](LIVE_VALIDATION.md) — dated live metrics, integration failures, and rehearsal record
+- [`TODO.md`](TODO.md) — implementation phases and acceptance checklist
+- [`evals/heldout/README.md`](evals/heldout/README.md) — historical-case selection and evaluation method
+
+The customer and entry records are synthetic. HTS lines and CBP ruling links are
+bounded, dated fixtures based on official public sources. Entry dates are fixed to
+the supported 2026 HTS revision observation date; unsupported historical dates fail
+instead of silently using a current rate.
