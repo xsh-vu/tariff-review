@@ -1302,9 +1302,20 @@ class TariffReviewClient:
         destination.write_text(json.dumps(review, indent=2), encoding="utf-8")
         return review
 
-    def request_draft(self, finding: dict[str, Any]) -> PendingDraft:
+    def request_draft(
+        self,
+        finding: dict[str, Any],
+        progress_callback: ProgressCallback | None = None,
+    ) -> PendingDraft:
+        def report(message: str) -> None:
+            if progress_callback is not None:
+                progress_callback(message)
+
         if finding["outcome"] != "potential_overpayment":
             raise ValueError("Only a potential overpayment may enter the broker draft flow")
+        report(
+            "Approval gate · creating a new short-lived, single-use broker token."
+        )
         context = {
             "client_id": "northfield-home-goods",
             "sku_id": finding["sku_id"],
@@ -1322,18 +1333,30 @@ class TariffReviewClient:
             "approval_token": token,
         }
         started = time.perf_counter()
-        response = self.client.responses.create(
-            model=self.config.model,
-            service_tier=self.config.service_tier,
-            instructions=(
-                "Call draft_correction exactly once with the exact JSON arguments "
-                "provided. Do not change, omit, or add values."
-            ),
-            input=json.dumps(intended_arguments),
-            tools=[self._mcp_tool([DRAFT_TOOL], "always")],
-            store=True,
+        report(
+            "Responses API · connecting to the MCP server with only "
+            "draft_correction available and approval required."
         )
+        try:
+            response = self.client.responses.create(
+                model=self.config.model,
+                service_tier=self.config.service_tier,
+                instructions=(
+                    "Call draft_correction exactly once with the exact JSON arguments "
+                    "provided. Do not change, omit, or add values."
+                ),
+                input=json.dumps(intended_arguments),
+                tools=[self._mcp_tool([DRAFT_TOOL], "always")],
+                store=True,
+            )
+        except Exception:
+            self.approval_store.deny(token)
+            raise
         elapsed = time.perf_counter() - started
+        report(
+            "Responses API · response received; checking for one "
+            "mcp_approval_request."
+        )
         if getattr(response, "status", None) not in {"completed", "incomplete"}:
             self.approval_store.deny(token)
             raise ResponseValidationError("Draft request failed before approval")
@@ -1347,6 +1370,10 @@ class TariffReviewClient:
             raise ResponseValidationError(
                 f"Expected one MCP approval request; received {len(requests)}"
             )
+        report(
+            "MCP approval · mcp_approval_request returned. draft_correction has "
+            "not run; the workflow is paused for the broker."
+        )
         item = requests[0]
         raw_arguments = self._item_value(item, "arguments")
         arguments = (
@@ -1355,6 +1382,10 @@ class TariffReviewClient:
         if arguments != intended_arguments or self._item_value(item, "name") != DRAFT_TOOL:
             self.approval_store.deny(token)
             raise ResponseValidationError("Pending draft tool name or arguments changed")
+        report(
+            "Validation · tool name and exact draft arguments matched the intended "
+            "request. Waiting for Approve or Deny."
+        )
         return PendingDraft(
             response_id=response.id,
             approval_request_id=self._item_value(item, "id"),
@@ -1364,12 +1395,30 @@ class TariffReviewClient:
             request_execution=self._usage_record(response, elapsed),
         )
 
-    def resolve_draft(self, pending: PendingDraft, approve: bool) -> dict[str, Any]:
+    def resolve_draft(
+        self,
+        pending: PendingDraft,
+        approve: bool,
+        progress_callback: ProgressCallback | None = None,
+    ) -> dict[str, Any]:
+        def report(message: str) -> None:
+            if progress_callback is not None:
+                progress_callback(message)
+
+        decision = "approval" if approve else "denial"
+        report(
+            f"Broker decision · recording the {decision} against the exact "
+            "single-use arguments."
+        )
         if approve:
             self.approval_store.approve(pending.approval_token, pending.arguments)
         else:
             self.approval_store.deny(pending.approval_token)
         started = time.perf_counter()
+        report(
+            "Responses API · sending mcp_approval_response "
+            f"(approve={str(approve).lower()}) with the previous response ID."
+        )
         response = self.client.responses.create(
             model=self.config.model,
             service_tier=self.config.service_tier,
@@ -1386,6 +1435,9 @@ class TariffReviewClient:
             ],
         )
         elapsed = time.perf_counter() - started
+        report(
+            "Responses API · approval continuation returned; validating the result."
+        )
         self._validate_response(response, expect_text=False)
         calls = [
             item
@@ -1393,6 +1445,9 @@ class TariffReviewClient:
             if self._item_type(item) == "mcp_call"
         ]
         if not approve:
+            report(
+                "MCP approval · denial confirmed. draft_correction was not called."
+            )
             return {
                 "status": "denied",
                 "response_id": response.id,
@@ -1400,12 +1455,17 @@ class TariffReviewClient:
             }
         if len(calls) != 1 or self._item_value(calls[0], "name") != DRAFT_TOOL:
             raise ResponseValidationError("Approved response did not execute one draft call")
+        report(
+            "MCP · draft_correction completed after server-side token and argument "
+            "validation."
+        )
         output = self._item_value(calls[0], "output")
         if isinstance(output, str):
             try:
                 output = json.loads(output)
             except json.JSONDecodeError:
                 output = {"raw_output": output}
+        report("Audit record · local correction draft created; nothing was filed.")
         return {
             "status": "draft_created",
             "response_id": response.id,

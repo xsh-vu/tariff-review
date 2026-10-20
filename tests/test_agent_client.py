@@ -579,10 +579,15 @@ def test_draft_flow_uses_one_mcp_approval_continuation(tmp_path) -> None:
         config=config(), approval_store=store, openai_client=fake
     )
     finding = FixtureReviewer().review(["NF-DW-001"])["proposal"]["findings"][0]
-    pending = client.request_draft(finding)
+    progress_messages: list[str] = []
+    pending = client.request_draft(finding, progress_callback=progress_messages.append)
     assert pending.tool_name == "draft_correction"
     assert fake.responses.calls[0]["tools"][0]["require_approval"] == "always"
-    result = client.resolve_draft(pending, approve=True)
+    result = client.resolve_draft(
+        pending,
+        approve=True,
+        progress_callback=progress_messages.append,
+    )
     continuation = fake.responses.calls[1]
     assert continuation["previous_response_id"] == "resp_pending"
     assert continuation["tools"][0]["allowed_tools"] == ["draft_correction"]
@@ -596,6 +601,9 @@ def test_draft_flow_uses_one_mcp_approval_continuation(tmp_path) -> None:
     ]
     assert result["status"] == "draft_created"
     assert result["output"]["not_filed"] is True
+    assert any("mcp_approval_request returned" in item for item in progress_messages)
+    assert any("mcp_approval_response" in item for item in progress_messages)
+    assert any("draft_correction completed" in item for item in progress_messages)
 
 
 def test_usage_cost_includes_cached_and_cache_write_tokens() -> None:

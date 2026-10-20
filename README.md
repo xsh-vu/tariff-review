@@ -157,6 +157,13 @@ initial failure-bearing baseline and post-fix evidence.
 4. Edit `NF-DW-003` to state that laboratory testing confirms a vacuum and rerun that SKU; it changes from `needs_info` to potential underpayment exposure.
 5. Show measured execution metadata. Only live mode may be presented as OpenAI API usage or latency.
 
+Exact validated reruns may be served from a 30-minute, session-only result cache.
+The UI labels these results and preserves the original response metadata while
+reporting zero new OpenAI requests and MCP calls. Editing the product description,
+changing the selected batch or execution configuration, changing source/code
+dependencies, or selecting **Run fresh review** forces a new live execution. Failed
+reviews and approval/draft state are never cached.
+
 ## Evidence and scope
 
 - [PROJECT.md](PROJECT.md) — product objective and scope

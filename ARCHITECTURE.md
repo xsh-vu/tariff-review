@@ -166,6 +166,23 @@ The MCP server must independently verify that the referenced review is in an app
 7. **Approve:** Dana inspects the exact pending tool name and arguments and explicitly authorizes or denies that single correction draft. Continue the Responses flow with an `mcp_approval_response` associated with the returned approval-request ID and previous response, while the MCP server separately checks application-owned approval state. Never file with CBP.
 8. **Record:** Save run trace, tool outcomes, model usage, validation results, and approval decision; redact secrets.
 
+### Exact-rerun result cache
+
+The Streamlit demo keeps a bounded, session-only cache of complete validated live
+reviews for 30 minutes. Its fingerprint covers the selected SKU order, exact
+description overrides, model and service tier, prompt and structured-output schema,
+MCP server identity and four-tool allowlist, OpenAI SDK version, calculator and
+orchestration code, and the product, entry, HTS, and ruling source files. Credentials
+are excluded. Any material change therefore forces a live run.
+
+Only records that passed structured-output, MCP-call, citation, HTS, SKU-coverage,
+and deterministic-calculation validation are eligible. Failures, pending approvals,
+and correction drafts are never cached. Cache hits are labeled in the UI, retain the
+original response ID and measured execution metadata, and report that the reuse made
+zero incremental OpenAI requests, MCP calls, or API cost. Dana can explicitly bypass
+the cache with **Run fresh review**. The cache is an application optimization, not an
+OpenAI prompt cache, and it is cleared when the Streamlit session ends.
+
 **Live edit:** Dana changes a product attribute (e.g., stoneware to porcelain), reruns **that SKU**, and sees a changed or unchanged classification *based on verified HTS distinctions*. The system must not be forced to change its answer merely because the demo expects it.
 
 ## 7. Structured output
@@ -249,6 +266,7 @@ A simple broker workbench, not a generic chatbot:
 - **Evidence trail:** concise tool activity and sources, with optional expansion.
 - **Findings:** prioritized potential base-duty overpayments; separate underpayments and needs-information cases; per-SKU source links and duty delta.
 - **Approval:** evidence-first draft review with Approve/Reject; draft ID only after approval.
+- **Progress visibility:** narrate review tools plus the approval-token, Responses API, `mcp_approval_request`, `mcp_approval_response`, and `draft_correction` stages, with heartbeats during quiet network periods and auto-follow of the newest active status message.
 - **Measured execution:** API usage/cost and run duration visibly separated from importer duty amounts.
 
 Planned demo beats: customer opportunity → review → evidence-backed financial finding → compliance/approval → live attribute edit → business impact and pilot. Optimize for a reliable five-minute walkthrough; pre-run a representative subset and keep a fallback trace.

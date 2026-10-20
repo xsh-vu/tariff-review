@@ -23,6 +23,14 @@ from app.evaluation_results import (
     load_published_historical_result,
     nonmatching_case_rows,
 )
+from app.review_cache import (
+    build_review_fingerprint,
+    get_review_result,
+    mark_live_review,
+    store_review_result,
+)
+from app.progress import AutoScrollingStatus, run_with_heartbeat
+from app.recommendations import summarize_recommendations
 from data.repository import PROJECT_ROOT, Repository
 from server import tools as local_tools
 
@@ -33,6 +41,9 @@ LIVE_MODE = "Live Responses API + MCP"
 FIXTURE_MODE = "Emergency deterministic fixture preview"
 LIVE_CLIENT_STATE_KEY = "_tariff_review_live_client"
 MCP_DISCOVERY_STATE_KEY = "_tariff_review_mcp_discovery"
+REVIEW_RESULT_CACHE_STATE_KEY = "_tariff_review_result_cache"
+SCROLL_TO_APPROVAL_STATE_KEY = "_tariff_review_scroll_to_approval"
+SCROLL_TO_SKU_STATE_KEY = "_tariff_review_scroll_to_sku"
 
 
 def environment_flag(name: str) -> bool:
@@ -104,18 +115,27 @@ def render_finding(
         ),
         "confirmed": "Retain the declared classification; no correction is indicated.",
     }
-    st.subheader(f"{finding['sku_id']} · {labels[finding['outcome']]}")
+    st.markdown(f"### `{finding['sku_id']}` · {labels[finding['outcome']]}")
     left, middle, right = st.columns(3)
-    left.metric("Declared", finding["declared_code"])
-    middle.metric("Proposed", finding["proposed_code"] or "No proposal")
+    left.metric("Declared classification code", finding["declared_code"])
+    middle.metric(
+        "Proposed classification code",
+        finding["proposed_code"] or "No proposal",
+    )
     calculation = calculations.get(finding["sku_id"])
     if calculation:
         difference = Decimal(calculation["potential_base_duty_difference"])
-        right.metric(
-            "Potential base-duty difference",
-            money(abs(difference)),
-            "overpayment" if difference > 0 else "underpayment exposure",
+        displayed_difference = (
+            f"-{money(abs(difference))}" if difference < 0 else money(difference)
         )
+        if difference > 0:
+            with right.container(key=f"duty_overpayment_{finding['sku_id']}"):
+                st.metric("Potential base-duty difference", displayed_difference)
+        elif difference < 0:
+            with right.container(key=f"duty_underpayment_{finding['sku_id']}"):
+                st.metric("Potential base-duty difference", displayed_difference)
+        else:
+            right.metric("Potential base-duty difference", displayed_difference)
     else:
         right.metric("Potential base-duty difference", "—")
     st.write(finding["deciding_rule"])
@@ -215,6 +235,127 @@ def run_review(
     raise ValueError(f"Unsupported execution mode: {mode}")
 
 
+def review_description_overrides(
+    edit_sku: str | None, edited_description: str | None
+) -> dict[str, str]:
+    if edit_sku is None or edited_description is None:
+        return {}
+    original = repository.get_product("northfield-home-goods", edit_sku)["description"]
+    return {edit_sku: edited_description} if edited_description != original else {}
+
+
+def session_review_cache() -> dict[str, dict[str, Any]]:
+    cache = st.session_state.get(REVIEW_RESULT_CACHE_STATE_KEY)
+    if not isinstance(cache, dict):
+        cache = {}
+        st.session_state[REVIEW_RESULT_CACHE_STATE_KEY] = cache
+    return cache
+
+
+def execute_review_with_cache(
+    *,
+    mode: str,
+    sku_ids: list[str],
+    edit_sku: str | None,
+    edited_description: str | None,
+    progress: AutoScrollingStatus,
+    force_fresh: bool = False,
+) -> dict[str, Any]:
+    """Run one validated review, reusing an exact live result when available."""
+    cached_review = None
+    fingerprint = None
+    if mode == LIVE_MODE:
+        client = live_client()
+        overrides = review_description_overrides(edit_sku, edited_description)
+        fingerprint = build_review_fingerprint(
+            client,
+            repository,
+            sku_ids,
+            overrides,
+        )
+        if force_fresh:
+            progress.write(
+                "Session cache · bypass requested; starting a new OpenAI + MCP "
+                "execution."
+            )
+        else:
+            progress.write(
+                "Session cache · checking for an exact validated match across "
+                "products, description, evidence, model, schema, and tool policy."
+            )
+            cached_review = get_review_result(session_review_cache(), fingerprint)
+        if cached_review is not None:
+            progress.write(
+                "Session cache · exact match found. Reusing the validated review "
+                "with 0 new OpenAI requests and 0 MCP calls."
+            )
+            return cached_review
+
+        progress.write(
+            "The model can choose from these read-only MCP tools: `get_catalog`, "
+            "`get_entries`, `search_hts_batch`, and `search_rulings_batch`. "
+            "Duty differences are calculated afterward by application code. "
+            "Connection and tool-call lifecycle events will appear below as the "
+            "Responses API streams them."
+        )
+
+    completed_review = run_review(
+        mode,
+        sku_ids,
+        edit_sku,
+        edited_description,
+        progress_callback=progress.write,
+    )
+    if mode == LIVE_MODE:
+        completed_review = mark_live_review(completed_review)
+        if fingerprint is None:
+            raise RuntimeError("Live review cache fingerprint was not created")
+        store_review_result(session_review_cache(), fingerprint, completed_review)
+        progress.write(
+            "Session cache · validated result retained for exact reruns for up to "
+            "30 minutes."
+        )
+    return completed_review
+
+
+def request_draft_with_progress(
+    client: TariffReviewClient,
+    finding: dict[str, Any],
+    progress_callback: Callable[[str], None],
+) -> PendingDraft:
+    """Support Streamlit sessions that retained a pre-callback client module."""
+    if "progress_callback" in signature(client.request_draft).parameters:
+        return client.request_draft(
+            finding,
+            progress_callback=progress_callback,
+        )
+    progress_callback(
+        "Compatibility · this hot-reloaded session has the earlier approval client; "
+        "waiting for its Responses API approval request without lifecycle events."
+    )
+    return client.request_draft(finding)
+
+
+def resolve_draft_with_progress(
+    client: TariffReviewClient,
+    pending: PendingDraft,
+    approve: bool,
+    progress_callback: Callable[[str], None],
+) -> dict[str, Any]:
+    """Support Streamlit sessions that retained a pre-callback client module."""
+    if "progress_callback" in signature(client.resolve_draft).parameters:
+        return client.resolve_draft(
+            pending,
+            approve=approve,
+            progress_callback=progress_callback,
+        )
+    progress_callback(
+        "Compatibility · this hot-reloaded session has the earlier approval client; "
+        "waiting for its Responses API approval continuation without lifecycle events."
+    )
+    return client.resolve_draft(pending, approve=approve)
+
+
 st.set_page_config(page_title="Harbor & Crane Tariff Audit", layout="wide")
 st.html(
     """
@@ -271,6 +412,52 @@ st.html(
         border-color: rgba(147, 197, 253, 0.85) !important;
         color: #ffffff !important;
     }
+    button[kind="primary"],
+    .st-key-tariff_review_results_container button[kind="secondary"],
+    .st-key-tariff_review_results_container [data-testid="stFormSubmitButton"] button {
+        background-color: rgba(37, 99, 235, 0.72) !important;
+        border-color: rgba(96, 165, 250, 0.60) !important;
+        color: #ffffff !important;
+    }
+    button[kind="primary"]:hover,
+    .st-key-tariff_review_results_container button[kind="secondary"]:hover,
+    .st-key-tariff_review_results_container [data-testid="stFormSubmitButton"] button:hover {
+        background-color: rgba(37, 99, 235, 0.90) !important;
+        border-color: rgba(147, 197, 253, 0.85) !important;
+        color: #ffffff !important;
+    }
+    [class*="st-key-duty_overpayment_"] [data-testid="stMetricValue"] {
+        color: #16a34a !important;
+    }
+    [class*="st-key-duty_underpayment_"] [data-testid="stMetricValue"] {
+        color: #dc2626 !important;
+    }
+    .st-key-summary_overpayment [data-testid="stMetricValue"] {
+        color: #16a34a !important;
+    }
+    .st-key-summary_underpayment [data-testid="stMetricValue"] {
+        color: #dc2626 !important;
+    }
+    .st-key-summary_needs_info [data-testid="stMetricValue"],
+    .st-key-summary_confirmed [data-testid="stMetricValue"] {
+        font-size: 1.35rem !important;
+        line-height: 1.25 !important;
+        white-space: normal !important;
+    }
+    .st-key-summary_overpayment [data-testid="stMetricLabel"],
+    .st-key-summary_underpayment [data-testid="stMetricLabel"],
+    .st-key-summary_needs_info [data-testid="stMetricLabel"],
+    .st-key-summary_confirmed [data-testid="stMetricLabel"] {
+        min-height: 3rem !important;
+    }
+    .st-key-summary_overpayment [data-testid="stMetricValue"],
+    .st-key-summary_underpayment [data-testid="stMetricValue"],
+    .st-key-summary_needs_info [data-testid="stMetricValue"],
+    .st-key-summary_confirmed [data-testid="stMetricValue"] {
+        align-items: flex-end !important;
+        display: flex !important;
+        min-height: 2.75rem !important;
+    }
     [data-testid="stTabs"] [data-testid="stTab"][aria-selected="true"],
     [data-testid="stTabs"] [data-testid="stTab"][aria-selected="true"] p {
         color: #60a5fa !important;
@@ -319,21 +506,96 @@ review_available = is_live or mode == FIXTURE_MODE
 
 def render_review_results(review: dict[str, Any]) -> None:
     proposal = review["proposal"]
-    with st.container(border=True):
-        st.header("Tariff review results")
-        over, under, status = st.columns(3)
-        over.metric(
-            "Potential overpayment", money(review["potential_overpayment_total"])
+    outcomes = [finding["outcome"] for finding in proposal["findings"]]
+    outcome_counts = {
+        "potential_overpayment": outcomes.count("potential_overpayment"),
+        "potential_underpayment": outcomes.count("potential_underpayment"),
+        "needs_info": outcomes.count("needs_info"),
+        "confirmed": outcomes.count("confirmed"),
+    }
+    reviewed_sku_ids = list(
+        dict.fromkeys(
+            finding["sku_id"]
+            for finding in proposal["findings"]
+            if finding.get("sku_id")
         )
-        under.metric(
-            "Underpayment exposure", money(review["potential_underpayment_total"])
+    )
+    reviewed_sku_count = len(reviewed_sku_ids)
+
+    def sku_count(count: int) -> str:
+        return f"{count} {'SKU' if count == 1 else 'SKUs'}"
+
+    scroll_to_sku = st.session_state.pop(SCROLL_TO_SKU_STATE_KEY, None)
+
+    with st.container(border=True, key="tariff_review_results_container"):
+        st.header(
+            f"Tariff review results · {sku_count(reviewed_sku_count)} reviewed"
         )
-        status.metric("Review status", proposal["status"].title())
+        cache_status = review.get("result_cache") or {}
+        if cache_status.get("hit"):
+            st.info(
+                "Reused a validated review from this browser session. No new "
+                "OpenAI request or MCP tool call was made. Original live run: "
+                f"{display_run_time(cache_status.get('original_measured_at'))}. "
+                "Select ‘Run fresh review’ above to execute the workflow again."
+            )
+        over, under, needs_info, confirmed = st.columns(4)
+        with over.container(key="summary_overpayment"):
+            st.metric(
+                "Potential overpayment "
+                f"({sku_count(outcome_counts['potential_overpayment'])})",
+                money(review["potential_overpayment_total"]),
+            )
+        with under.container(key="summary_underpayment"):
+            st.metric(
+                "Underpayment exposure "
+                f"({sku_count(outcome_counts['potential_underpayment'])})",
+                f"-{money(abs(Decimal(review['potential_underpayment_total'])))}",
+            )
+        with needs_info.container(key="summary_needs_info"):
+            st.metric(
+                f"Needs more info ({sku_count(outcome_counts['needs_info'])})",
+                "Pending evidence" if outcome_counts["needs_info"] else "None",
+            )
+        with confirmed.container(key="summary_confirmed"):
+            st.metric(
+                f"Classification confirmed ({sku_count(outcome_counts['confirmed'])})",
+                "No change" if outcome_counts["confirmed"] else "None",
+            )
+        st.caption(f"Review status: {proposal['status'].title()}.")
+        st.markdown(
+            "**How these amounts were calculated:** For each affected entry, the "
+            "entered value is multiplied by the declared base duty rate and by the "
+            "proposed base duty rate. Declared duty minus proposed duty gives the "
+            "displayed difference. Potential overpayments and underpayment exposures "
+            "are totaled separately rather than netted together."
+        )
         st.caption(
             "Potential differences are not guaranteed refunds. Chapter 99 duties, "
             "trade remedies, preferences, origin, deadlines, and recovery eligibility "
             "are excluded."
         )
+
+        st.subheader("Recommended next actions")
+        for recommendation in summarize_recommendations(proposal["findings"]):
+            sku_list = ", ".join(
+                f"`{sku_id}`" for sku_id in recommendation["sku_ids"]
+            )
+            st.markdown(
+                f"- **{recommendation['label']} "
+                f"({recommendation['count']}):** {sku_list}. "
+                f"{recommendation['action']}"
+            )
+        if any(
+            finding["outcome"] == "potential_overpayment"
+            for finding in proposal["findings"]
+        ):
+            st.info(
+                "For a potential overpayment, use **Prepare correction draft** below. "
+                "You will see the exact draft request before choosing **Approve one "
+                "draft** or **Deny draft**. Approval creates a local draft only; "
+                "nothing is filed with CBP."
+            )
 
         ordered_outcomes = [
             "potential_overpayment",
@@ -346,23 +608,185 @@ def render_review_results(review: dict[str, Any]) -> None:
             key=lambda item: ordered_outcomes.index(item["outcome"]),
         )
         for index, finding in enumerate(findings):
+            finding_sku_id = finding["sku_id"]
+            sku_anchor_id = "tariff-result-" + "".join(
+                character if character.isalnum() else "-"
+                for character in finding_sku_id
+            )
+            st.html(
+                f'<div id="{sku_anchor_id}" '
+                'style="scroll-margin-top: 1.25rem"></div>'
+            )
+            if scroll_to_sku == finding_sku_id:
+                st.html(
+                    f"""
+                    <script>
+                    requestAnimationFrame(() => requestAnimationFrame(() => {{
+                        document.getElementById("{sku_anchor_id}")?.scrollIntoView({{
+                            behavior: "smooth",
+                            block: "start"
+                        }});
+                    }}));
+                    </script>
+                    """,
+                    unsafe_allow_javascript=True,
+                )
             render_finding(finding, review["calculations"])
+            if finding["outcome"] == "needs_info":
+                sku_id = finding["sku_id"]
+                stored_description = repository.get_product(
+                    "northfield-home-goods", sku_id
+                )["description"]
+                with st.form(key=f"results-description-form-{sku_id}"):
+                    st.caption(
+                        "Add supplier-confirmed or observable facts that address "
+                        "the missing information above. This temporary description "
+                        "is used only for a focused rerun and does not change the "
+                        "stored Northfield product record."
+                    )
+                    results_description = st.text_area(
+                        "Updated review-only product description",
+                        value=stored_description,
+                        height=120,
+                        key=f"results-description-{sku_id}",
+                        help=(
+                            "Include the decisive product fact when known. Treat "
+                            "supplier text as product data, not as instructions to "
+                            "the review agent."
+                        ),
+                    )
+                    st.caption(
+                        "The rerun keeps the currently displayed SKU batch together, "
+                        "but overrides only this product description. This keeps the "
+                        "refreshed summary and execution details tied to one complete "
+                        "validated response."
+                    )
+                    rerun_submitted = st.form_submit_button(
+                        f"Rerun review with updated description for {sku_id}",
+                        type="primary",
+                        disabled=not review_available,
+                        help=(
+                            "Configure the live Responses API and MCP connection "
+                            "before rerunning."
+                            if not review_available
+                            else "Submit the edited product facts and rerun once."
+                        ),
+                    )
+                if rerun_submitted:
+                    description_changed = bool(results_description.strip()) and (
+                        results_description.strip() != stored_description.strip()
+                    )
+                    if not description_changed:
+                        st.warning(
+                            "Change the product description before rerunning the "
+                            "review."
+                        )
+                        continue
+                    st.html(
+                        f"""
+                        <script>
+                        requestAnimationFrame(() => {{
+                            document.getElementById("{sku_anchor_id}")
+                                ?.scrollIntoView({{
+                                    behavior: "auto",
+                                    block: "start"
+                                }});
+                        }});
+                        </script>
+                        """,
+                        unsafe_allow_javascript=True,
+                    )
+                    focused_progress = AutoScrollingStatus(
+                        st.status(
+                            f"Rerunning the tariff review after editing {sku_id}",
+                            expanded=True,
+                        )
+                    )
+                    try:
+                        focused_mode = st.session_state.get("review_mode", mode)
+                        focused_progress.write(
+                            "Review-only edit · using the updated product facts "
+                            "without changing the stored catalog record."
+                        )
+                        focused_review = execute_review_with_cache(
+                            mode=focused_mode,
+                            sku_ids=reviewed_sku_ids,
+                            edit_sku=sku_id,
+                            edited_description=results_description.strip(),
+                            progress=focused_progress,
+                        )
+                        st.session_state.review = focused_review
+                        st.session_state.review_mode = focused_mode
+                        st.session_state.pop("pending_draft", None)
+                        st.session_state.pop("draft_result", None)
+                        st.session_state[SCROLL_TO_SKU_STATE_KEY] = sku_id
+                        focused_progress.update(
+                            label=f"Tariff review updated for {sku_id}",
+                            state="complete",
+                            expanded=False,
+                        )
+                        st.rerun()
+                    except Exception as exc:
+                        focused_progress.update(
+                            label="Updated review stopped safely",
+                            state="error",
+                            expanded=True,
+                        )
+                        st.error(f"Updated review stopped safely: {exc}")
             if finding["outcome"] == "potential_overpayment":
                 if st.button(
                     f"Prepare correction draft for {finding['sku_id']}",
                     key=f"prepare-{finding['sku_id']}",
                 ):
                     try:
+                        draft_progress = AutoScrollingStatus(
+                            st.status(
+                                "Preparing broker approval request",
+                                expanded=True,
+                            )
+                        )
                         if st.session_state.review_mode == LIVE_MODE:
-                            pending = live_client().request_draft(finding)
+                            client = live_client()
+                            pending = run_with_heartbeat(
+                                lambda report: request_draft_with_progress(
+                                    client,
+                                    finding,
+                                    report,
+                                ),
+                                draft_progress.write,
+                                waiting_message=(
+                                    "waiting for the Responses API to return "
+                                    "mcp_approval_request"
+                                ),
+                            )
                             st.session_state.pending_draft = {
                                 "mode": "live",
                                 **pending.to_dict(),
                             }
                         else:
+                            draft_progress.write(
+                                "Fixture approval gate · creating a short-lived, "
+                                "single-use local token."
+                            )
                             st.session_state.pending_draft = prepare_local_pending(finding)
+                            draft_progress.write(
+                                "Fixture approval request ready. No OpenAI or MCP "
+                                "approval event was used."
+                            )
+                        st.session_state[SCROLL_TO_APPROVAL_STATE_KEY] = True
+                        draft_progress.update(
+                            label="Broker approval request ready",
+                            state="complete",
+                            expanded=False,
+                        )
                         st.rerun()
                     except Exception as exc:
+                        if "draft_progress" in locals():
+                            draft_progress.update(
+                                label="Approval request stopped safely",
+                                state="error",
+                                expanded=True,
+                            )
                         st.error(f"Draft request stopped safely: {exc}")
             if index < len(findings) - 1:
                 st.divider()
@@ -372,6 +796,13 @@ def render_execution_metrics(review: dict[str, Any]) -> None:
     execution = review["execution"]
     with st.container(border=True, key="openai_execution"):
         st.subheader("Measured OpenAI execution")
+        cache_status = review.get("result_cache") or {}
+        if cache_status.get("hit"):
+            st.info(
+                "Cached display: the measurements below belong to the original "
+                "live execution. This reuse made 0 new OpenAI requests and 0 MCP "
+                "calls, with $0.000000 incremental API cost."
+            )
         if execution["mode"] == "live_responses_api_remote_mcp":
             st.caption(
                 "Last run completed: "
@@ -623,6 +1054,14 @@ def render_review_tab() -> None:
     run_label = "Run edited SKU review" if description_changed else "Run tariff review"
     selected_sku_set = set(sku_ids)
     review_sku_ids = [sku for sku in product_by_id if sku in selected_sku_set]
+    force_fresh_review = st.checkbox(
+        "Run fresh review (bypass a matching session result)",
+        value=False,
+        help=(
+            "Leave this off to reuse an exact validated result for up to 30 minutes. "
+            "Turn it on to make a new Responses API request and new MCP calls."
+        ),
+    )
     if st.button(
         run_label,
         type="primary",
@@ -638,23 +1077,18 @@ def render_review_tab() -> None:
             )
         ),
     ):
-        progress = st.status("Tariff review in progress", expanded=True)
+        progress = AutoScrollingStatus(
+            st.status("Tariff review in progress", expanded=True)
+        )
         try:
             st.session_state.pop("review", None)
-            if mode == LIVE_MODE:
-                progress.write(
-                    "The model can choose from these read-only MCP tools: `get_catalog`, "
-                    "`get_entries`, `search_hts_batch`, and `search_rulings_batch`. "
-                    "Duty differences are calculated afterward by application code. "
-                    "Connection and tool-call lifecycle events will appear below as "
-                    "the Responses API streams them."
-                )
-            st.session_state.review = run_review(
-                mode,
-                review_sku_ids,
-                edit_sku,
-                edited_description,
-                progress_callback=progress.write,
+            st.session_state.review = execute_review_with_cache(
+                mode=mode,
+                sku_ids=review_sku_ids,
+                edit_sku=edit_sku,
+                edited_description=edited_description,
+                progress=progress,
+                force_fresh=force_fresh_review,
             )
             st.session_state.review_mode = mode
             st.session_state.pop("pending_draft", None)
@@ -680,7 +1114,31 @@ def render_review_tab() -> None:
 
     pending = st.session_state.get("pending_draft")
     if pending:
+        scroll_to_approval = bool(
+            st.session_state.pop(SCROLL_TO_APPROVAL_STATE_KEY, False)
+        )
+        st.html(
+            """
+            <div id="broker-approval" style="scroll-margin-top: 1.25rem"></div>
+            """
+        )
         st.header("Broker approval required")
+        if scroll_to_approval:
+            # This constant script contains no user or model content. It runs once
+            # after the pending draft rerun so the approval controls are visible.
+            st.html(
+                """
+                <script>
+                requestAnimationFrame(() => {
+                    document.getElementById("broker-approval")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start"
+                    });
+                });
+                </script>
+                """,
+                unsafe_allow_javascript=True,
+            )
         st.warning(
             "Review the exact pending arguments. Approval authorizes one local draft only; "
             "it does not file anything with CBP."
@@ -690,38 +1148,119 @@ def render_review_tab() -> None:
             for key, value in pending["arguments"].items()
         }
         st.json(displayed)
-        approve_column, deny_column = st.columns(2)
-        if approve_column.button("Approve one draft", type="primary"):
+        decision_controls = st.empty()
+        with decision_controls.container():
+            approve_column, deny_column = st.columns(2)
+            approve_clicked = approve_column.button(
+                "Approve one draft",
+                type="primary",
+                key="approve_pending_draft",
+            )
+            deny_clicked = deny_column.button(
+                "Deny draft",
+                key="deny_pending_draft",
+            )
+
+        if approve_clicked:
+            # Remove both controls before the blocking continuation begins. This
+            # prevents Streamlit from briefly retaining an old and new widget copy.
+            decision_controls.empty()
             try:
+                approval_progress = AutoScrollingStatus(
+                    st.status(
+                        "Executing approved correction draft",
+                        expanded=True,
+                    )
+                )
                 if pending["mode"] == "live":
                     payload = {key: value for key, value in pending.items() if key != "mode"}
-                    result = live_client().resolve_draft(
-                        PendingDraft(**payload), approve=True
+                    client = live_client()
+                    result = run_with_heartbeat(
+                        lambda report: resolve_draft_with_progress(
+                            client,
+                            PendingDraft(**payload),
+                            True,
+                            report,
+                        ),
+                        approval_progress.write,
+                        waiting_message=(
+                            "waiting for the Responses API and draft_correction MCP call"
+                        ),
                     )
                 else:
+                    approval_progress.write(
+                        "Fixture approval gate · approving the exact single-use "
+                        "draft arguments."
+                    )
                     local_tools.approval_store.approve(
                         pending["approval_token"], pending["arguments"]
                     )
+                    approval_progress.write(
+                        "Fixture tool · draft_correction · validating the token, "
+                        "calculation, and evidence."
+                    )
                     result = local_tools.draft_correction(**pending["arguments"])
+                approval_progress.update(
+                    label="Correction draft created locally",
+                    state="complete",
+                    expanded=False,
+                )
                 st.session_state.draft_result = result
                 st.session_state.pop("pending_draft", None)
                 st.rerun()
             except Exception as exc:
+                if "approval_progress" in locals():
+                    approval_progress.update(
+                        label="Draft creation stopped safely",
+                        state="error",
+                        expanded=True,
+                    )
                 st.error(f"Draft was not created: {exc}")
-        if deny_column.button("Deny draft"):
+        elif deny_clicked:
+            decision_controls.empty()
             try:
+                denial_progress = AutoScrollingStatus(
+                    st.status(
+                        "Recording correction-draft denial",
+                        expanded=True,
+                    )
+                )
                 if pending["mode"] == "live":
                     payload = {key: value for key, value in pending.items() if key != "mode"}
-                    result = live_client().resolve_draft(
-                        PendingDraft(**payload), approve=False
+                    client = live_client()
+                    result = run_with_heartbeat(
+                        lambda report: resolve_draft_with_progress(
+                            client,
+                            PendingDraft(**payload),
+                            False,
+                            report,
+                        ),
+                        denial_progress.write,
+                        waiting_message=(
+                            "waiting for the Responses API to confirm denial"
+                        ),
                     )
                 else:
+                    denial_progress.write(
+                        "Fixture approval gate · denying the single-use local token."
+                    )
                     local_tools.approval_store.deny(pending["approval_token"])
                     result = {"status": "denied"}
+                denial_progress.update(
+                    label="Correction draft denied; no draft created",
+                    state="complete",
+                    expanded=False,
+                )
                 st.session_state.draft_result = result
                 st.session_state.pop("pending_draft", None)
                 st.rerun()
             except Exception as exc:
+                if "denial_progress" in locals():
+                    denial_progress.update(
+                        label="Draft denial stopped safely",
+                        state="error",
+                        expanded=True,
+                    )
                 st.error(f"Denial could not be recorded: {exc}")
 
     draft_result = st.session_state.get("draft_result")
