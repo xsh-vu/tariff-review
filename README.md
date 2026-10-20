@@ -32,7 +32,9 @@ Open three terminals in the repository root and keep all three processes running
 ```
 
 The local Streamable HTTP endpoint listens at `http://127.0.0.1:8000/mcp` by
-default. Keep it on loopback; the Secure MCP Tunnel connects outbound to OpenAI.
+default. This prototype server does not authenticate inbound requests, so keep it
+on loopback and do not expose port 8000 publicly. The Secure MCP Tunnel connects
+outbound to OpenAI without making the local endpoint public.
 
 **Terminal 2 — private tunnel**
 
@@ -157,13 +159,18 @@ Choose exactly one MCP transport:
 
 - **Private local MCP server:** set `MCP_TUNNEL_ID` and leave `MCP_SERVER_URL` and
   `MCP_AUTH_TOKEN` blank.
-- **Authenticated public MCP server:** set an HTTPS `MCP_SERVER_URL` and
-  `MCP_AUTH_TOKEN`, and leave `MCP_TUNNEL_ID` blank. The application intentionally
-  rejects an unauthenticated public endpoint.
+- **Externally authenticated HTTPS MCP server:** set an HTTPS `MCP_SERVER_URL` and
+  `MCP_AUTH_TOKEN`, and leave `MCP_TUNNEL_ID` blank. The endpoint or a gateway in
+  front of it must validate that token. The application rejects configuration
+  without a token, but that client-side check does not prove that the remote server
+  enforces authentication.
 
-The server-side application places the remote MCP token in the Responses API
-tool’s `authorization` field. It does not place credentials in model instructions,
-tool arguments, Streamlit session caches, or UI output.
+The application places the remote MCP token in the Responses API tool’s
+`authorization` field. It does not place credentials in model instructions, tool
+arguments, Streamlit session caches, or UI output. The local server in
+`server/mcp_server.py` does not validate bearer tokens and is intended only for
+the loopback-plus-tunnel configuration. Do not put it directly behind a public URL
+without adding and testing authentication at the server or gateway boundary.
 
 ### 3. Configure Secure MCP Tunnel
 
@@ -173,10 +180,11 @@ then install the latest official
 release and verify its checksum. The tunnel runtime key needs **Tunnels Read +
 Use**. A tunnel creator additionally needs **Tunnels Manage**.
 
-On this Intel Mac, download the macOS `x86_64`/`amd64` build. After verifying its
-published checksum and extracting the download, place the executable in the local
-user path. The tested download extracted to the path below; use the corresponding
-folder name if a newer release is installed:
+Download the release for the interviewer's operating system and CPU architecture,
+verify its published checksum, and place the extracted executable in the local user
+path. The example below is the path tested on an Intel Mac with the macOS
+`x86_64`/`amd64` v0.0.16 release; use the matching artifact and extracted folder
+for the machine and release being configured:
 
 ```bash
 mkdir -p "$HOME/.local/bin"
@@ -284,6 +292,12 @@ This writes `evals/live_results.json` and covers the four primary demo outcomes,
 the description edit, remote MCP use, and strict Structured Outputs. It uses
 synthetic Northfield scenarios rather than independent historical rulings.
 
+Every invocation replaces `evals/live_results.json`, including an invocation that
+fails because credentials, the MCP server, or the tunnel are unavailable. Copy a
+result to a separately named file before rerunning if it must be preserved as dated
+evidence. A passing prior file must never be presented as the outcome of a newer
+failed run.
+
 ### Historical CBP CROSS benchmark
 
 ```bash
@@ -297,6 +311,12 @@ The runner loads only sanitized product descriptions and case dates before model
 execution. It allows two read-only historical-evidence MCP tools, persists raw
 responses, and loads the hidden answer key only afterward for deterministic grading.
 See [`evals/heldout/README.md`](evals/heldout/README.md) for the methodology.
+
+The application displays the explicitly pinned clean post-fix result
+`evals/heldout/results/postfix-full-20261019.json`; it does not treat `latest.json`
+as an alias for the best run. The retained `latest.json` baseline includes four
+tool-schema failures and is kept to show that the reliability grader records MCP
+failures instead of silently excluding them.
 
 The clean October 19, 2026 `gpt-6.1-sol` run produced:
 
